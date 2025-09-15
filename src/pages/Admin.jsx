@@ -1,14 +1,14 @@
+// web/src/pages/Admin.jsx
 import React, { useEffect, useRef, useState } from 'react'
 import { auth, db, serverTimestamp } from '../lib/firebase'
 import {
-  collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy, getDoc,
-  setDoc
+  collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy, getDoc, setDoc
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 
-/** ===========================
- *  עוזר: בדיקת אדמין
- *  =========================== */
+/** ─────────────────────────────────────────────────────────────
+ *  בדיקת אדמין (admins/{uid})
+ *  ──────────────────────────────────────────────────────────── */
 async function isAdmin() {
   const uid = auth.currentUser?.uid
   if (!uid) return false
@@ -17,29 +17,46 @@ async function isAdmin() {
   return snap.exists()
 }
 
-/** ===========================
- *  עוזרים לייבוא
- *  =========================== */
-// כינויים נפוצים בעברית/אנגלית לכותרות
+/** ─────────────────────────────────────────────────────────────
+ *  מילון כינויים לעמודות — מותאם לקובץ שסיפקת
+ *  ──────────────────────────────────────────────────────────── */
 const synonyms = {
-  recipientName: ['שם', 'שם מלא', 'שם הנזקק', 'מקבל', 'נזקק', 'שם משפחה ושם פרטי'],
-  street:        ['רחוב', 'כתובת', 'רחוב ומספר', 'רחוב+מספר', 'כתובת מלאה'],
-  city:          ['עיר', 'ישוב', 'עיר/ישוב'],
-  neighborhood:  ['שכונה', 'אזור', 'שכונה/אזור'],
-  apartment:     ['דירה', 'מספר דירה', 'קומה', 'כניסה', 'דירה/קומה/כניסה'],
-  phone:         ['טלפון', 'טל', 'נייד', 'מספר טלפון', 'סלולרי', 'מספר נייד'],
-  packageCount:  ['כמות', 'מספר חבילות', 'חבילות', 'סלים'],
-  notes:         ['הערות', 'הערה', 'מידע נוסף'],
+  recipientName: ['Name','שם','שם מלא','שם הנזקק','מקבל','נזקק','שם משפחה ושם פרטי'],
+
+  // כתובת – או שדה אחד מלא או מפוצל
+  streetFull:    ['כתובת','כתובת מלאה','רחוב ומספר','רחוב+מספר'],
+  streetName:    ['רחוב','שם רחוב'],
+  houseNumber:   ['בית','מספר בית','מספר','בית מספר'],
+
+  city:          ['עיר','ישוב','עיר/ישוב'],
+  neighborhood:  ['שכונה','אזור','שכונה/אזור'],
+
+  apartment:     ['דירה','מספר דירה'],
+  entrance:      ['כניסה'],
+  floor:         ['קומה'],
+
+  phone:         ['Subitems','טלפון','טל','נייד','מספר טלפון','סלולרי','מספר נייד'],
+
+  packageCount:  ['מספר חבילות','כמות','חבילות','סלים'], // ברירת מחדל 1 אם אין
+  notes:         ['הערות','הערות לכתובת','הערה','מידע נוסף'],
+
+  // שדות ייעודיים מהקובץ שלך:
+  doorCode:      ['קוד כניסה לדלת','קוד כניסה','קוד'],
+  householdSize: ['מספר נפשות'],
+  campaign:      ['ראש השנה תשפ"ו','קמפיין','אירוע']
 }
 
-function norm(s = '') {
+/** ─────────────────────────────────────────────────────────────
+ *  עזרי נירמול/שליפה/CSV
+ *  ──────────────────────────────────────────────────────────── */
+function norm(s=''){
   return String(s).trim().toLowerCase()
-    .replace(/[\"׳״']/g, '')
-    .replace(/\s+/g, ' ')
+    .replace(/[\"׳״']/g,'')
+    .replace(/\s+/g,' ')
 }
 
-function pick(row, keys) {
-  for (const k of keys) {
+function pick(row, keys){
+  for (const k of keys){
     if (row[k] != null && row[k] !== '') return String(row[k]).trim()
     const found = Object.keys(row).find(col => norm(col) === norm(k))
     if (found && row[found] != null && row[found] !== '') return String(row[found]).trim()
@@ -47,42 +64,55 @@ function pick(row, keys) {
   return ''
 }
 
-function coerceNumber(v, fallback = null) {
+function coerceNumber(v, fallback=null){
   if (v === '' || v == null) return fallback
-  const n = Number(String(v).replace(/[^\d\.\-]/g, ''))
+  const n = Number(String(v).replace(/[^\d\.\-]/g,''))
   return isNaN(n) ? fallback : n
 }
 
-function parseCsvLine(line) {
-  const out = []; let cur = '', inQ = false
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    if (ch === '"') {
-      if (inQ && line[i + 1] === '"') { cur += '"'; i++ } else inQ = !inQ
-    } else if (ch === ',' && !inQ) { out.push(cur); cur = '' }
-    else { cur += ch }
+function parseCsvLine(line){
+  const out=[]; let cur='', inQ=false
+  for (let i=0;i<line.length;i++){
+    const ch=line[i]
+    if (ch === '"'){ if (inQ && line[i+1]==='"'){cur+='"'; i++} else inQ=!inQ }
+    else if (ch === ',' && !inQ){ out.push(cur); cur='' }
+    else cur+=ch
   }
   out.push(cur)
   return out
 }
-
-function csvToObjects(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim() !== '')
+function csvToObjects(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim()!=='')
   if (!lines.length) return []
-  const headers = parseCsvLine(lines.shift()).map(h => h.trim())
-  const out = []
-  for (const line of lines) {
-    const cells = parseCsvLine(line)
-    const obj = {}
-    headers.forEach((h, i) => obj[h] = (cells[i] ?? '').trim())
+  const headers = parseCsvLine(lines.shift()).map(h=>h.trim())
+  const out=[]
+  for (const ln of lines){
+    const cells = parseCsvLine(ln)
+    const obj={}
+    headers.forEach((h,i)=> obj[h] = (cells[i]??'').trim())
     out.push(obj)
   }
   return out
 }
 
-/** ===========================
- *  רכיב ראשי: Admin
- *  =========================== */
+/** חיפוש שורת כותרות חכמה ב־XLSX גם אם אינה בשורה 1 */
+function findHeaderRow(rows2D){
+  const wanted = [
+    ...synonyms.recipientName,
+    ...synonyms.streetFull, ...synonyms.streetName,
+    ...synonyms.phone, ...synonyms.neighborhood
+  ].map(norm)
+  for (let i=0;i<rows2D.length;i++){
+    const row = rows2D[i].map(norm)
+    const hits = row.filter(cell => wanted.includes(cell)).length
+    if (hits >= 2) return i
+  }
+  return 0
+}
+
+/** ─────────────────────────────────────────────────────────────
+ *  קומפוננטה ראשית
+ *  ──────────────────────────────────────────────────────────── */
 export default function Admin() {
   const [allowed, setAllowed] = useState(false)
 
@@ -95,7 +125,7 @@ export default function Admin() {
   const [filterNeighborhood, setFilterNeighborhood] = useState('all')
   const [qtext, setQtext] = useState('')
 
-  // UI helpers
+  // UI
   const fileRef = useRef(null)
   const [msg, setMsg] = useState('')
 
@@ -124,40 +154,50 @@ export default function Admin() {
       })
     })()
 
-    return () => {
-      unsubDeliveries()
-      unsubNeighborhoods()
-    }
+    return () => { unsubDeliveries(); unsubNeighborhoods() }
   }, [])
 
   if (!auth.currentUser) return <Wrap><h3>יש להתחבר תחילה</h3></Wrap>
   if (!allowed) return (
     <Wrap>
       <h3 className="text-lg font-semibold mb-2">אין לך הרשאת אדמין</h3>
-      <p>כדי להפוך לאדמין: ב־Firestore צור אוסף <code>admins</code> ומסמך עם ה־UID שלך. ערך לדוגמה: <code>{`{ role: "admin" }`}</code></p>
+      <p>ב־Firestore צור אוסף <code>admins</code> ומסמך עם ה־UID שלך. לדוגמה: <code>{`{ role: "admin" }`}</code></p>
     </Wrap>
   )
 
-  /** ===== פעולות אדמין ===== */
+  /** ───── פעולות אדמין ───── */
   const addDelivery = async () => {
     const recipientName = prompt('שם נזקק:'); if (!recipientName) return
-    const street = prompt('רחוב+מספר:'); if (!street) return
+    const streetName = prompt('רחוב:'); if (!streetName) return
+    const houseNumber = prompt('מספר בית (אופציונלי):')?.trim() || ''
     const city = prompt('עיר (ברירת מחדל חריש):')?.trim() || 'חריש'
     const neighborhood = prompt('שכונה (אופציונלי):')?.trim() || ''
-    const apartment = prompt('דירה/קומה/כניסה (אופציונלי):')?.trim() || ''
+    const apt = prompt('דירה (אופציונלי):')?.trim() || ''
+    const ent = prompt('כניסה (אופציונלי):')?.trim() || ''
+    const flr = prompt('קומה (אופציונלי):')?.trim() || ''
+    const doorCode = prompt('קוד כניסה (אופציונלי):')?.trim() || ''
     const phone = prompt('טלפון (אופציונלי):')?.trim() || ''
     const pkg = Number(prompt('מספר חבילות (ברירת מחדל 1):')?.trim() || '1')
+    const notes = prompt('הערות (אופציונלי):')?.trim() || ''
+
+    const street = [streetName, houseNumber].filter(Boolean).join(' ')
+    const aptParts = []
+    if (apt) aptParts.push(apt)
+    if (ent) aptParts.push(`כניסה ${ent}`)
+    if (flr) aptParts.push(`קומה ${flr}`)
+    const apartment = aptParts.join(' ').trim()
 
     const address = { street, city }
-    if (apartment) address.apartment = apartment
     if (neighborhood) address.neighborhood = neighborhood
+    if (apartment) address.apartment = apartment
+    if (doorCode) address.doorCode = doorCode
 
     await addDoc(collection(db, 'deliveries'), {
       recipientName,
       address,
       phone,
       packageCount: isNaN(pkg) ? 1 : pkg,
-      notes: '',
+      notes,
       status: 'pending',
       assignedVolunteerId: null,
       createdAt: serverTimestamp(),
@@ -165,61 +205,99 @@ export default function Admin() {
     })
   }
 
-  const importFile = async (file) => {
+  async function importFile(file){
     setMsg('מייבא…')
-    try {
+    try{
       const ext = file.name.toLowerCase().split('.').pop()
-      let rows = []
-      if (ext === 'csv') {
-        rows = csvToObjects(await file.text())
-      } else if (ext === 'xlsx' || ext === 'xls') {
+      let rawObjects = []
+
+      if (ext === 'csv'){
+        rawObjects = csvToObjects(await file.text())
+      } else if (ext === 'xlsx' || ext === 'xls'){
         const data = await file.arrayBuffer()
-        const wb = XLSX.read(data, { type: 'array' })
+        const wb = XLSX.read(data, { type:'array' })
         const sheet = wb.Sheets[wb.SheetNames[0]]
-        rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+        const rows2D = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' })
+        const headerRowIdx = findHeaderRow(rows2D)
+        const headers = rows2D[headerRowIdx].map(h => String(h||'').trim())
+        const dataRows = rows2D.slice(headerRowIdx+1).filter(r => r.some(c => String(c).trim() !== ''))
+        rawObjects = dataRows.map(r=>{
+          const o={}
+          headers.forEach((h,i)=> o[h] = (r[i] ?? '').toString().trim())
+          return o
+        })
       } else {
         throw new Error('קובץ לא נתמך (בחר CSV/XLSX/XLS)')
       }
 
-      if (!rows.length) { setMsg('קובץ ריק'); return }
+      if (!rawObjects.length){ setMsg('קובץ ריק'); return }
 
-      let ok = 0, fail = 0
-      for (const r of rows) {
-        try {
+      let ok=0, fail=0, lastError=''
+
+      for (const r of rawObjects){
+        try{
           const recipientName = pick(r, synonyms.recipientName)
-          const fullStreet = pick(r, synonyms.street)
-          const city = pick(r, synonyms.city) || 'חריש'
+
+          // כתובת: או "כתובת מלאה" או מרכיבים רחוב+בית
+          let street = pick(r, synonyms.streetFull)
+          if (!street){
+            const streetName  = pick(r, synonyms.streetName)
+            const houseNumber = pick(r, synonyms.houseNumber)
+            street = [streetName, houseNumber].filter(Boolean).join(' ')
+          }
+
+          const city         = pick(r, synonyms.city) || 'חריש'
           const neighborhood = pick(r, synonyms.neighborhood)
-          const apartment = pick(r, synonyms.apartment)
-          const phone = pick(r, synonyms.phone)
-          const packageCount = coerceNumber(pick(r, synonyms.packageCount), 1)
-          const notes = pick(r, synonyms.notes)
 
-          if (!recipientName || !fullStreet) throw new Error('שם וכתובת חובה')
+          // מרכיבים דירה/כניסה/קומה לטקסט אחד
+          const aptParts = []
+          const apt = pick(r, synonyms.apartment)
+          const ent = pick(r, synonyms.entrance)
+          const flr = pick(r, synonyms.floor)
+          if (apt) aptParts.push(apt)
+          if (ent) aptParts.push(`כניסה ${ent}`)
+          if (flr) aptParts.push(`קומה ${flr}`)
+          const apartment = aptParts.join(' ').trim() || ''
 
-          const address = { street: fullStreet, city }
-          if (apartment) address.apartment = apartment
+          const phone         = pick(r, synonyms.phone)
+          const packageCount  = coerceNumber(pick(r, synonyms.packageCount), 1)
+          const notesRaw      = pick(r, synonyms.notes)
+          const doorCode      = pick(r, synonyms.doorCode)
+          const householdSize = coerceNumber(pick(r, synonyms.householdSize), null)
+          const campaign      = pick(r, synonyms.campaign)
+
+          if (!recipientName || !street) throw new Error('שם וכתובת חובה')
+
+          const address = { street, city }
           if (neighborhood) address.neighborhood = neighborhood
+          if (apartment)    address.apartment    = apartment
+          if (doorCode)     address.doorCode     = doorCode
 
-          await addDoc(collection(db, 'deliveries'), {
+          const notes = notesRaw
+
+          await addDoc(collection(db,'deliveries'), {
             recipientName,
             address,
             phone,
             packageCount,
             notes,
+            householdSize,    // אופציונלי
+            campaign,         // אופציונלי
             status: 'pending',
             assignedVolunteerId: null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           })
+
           ok++
-        } catch (e) {
-          console.error('שורה נכשלה', e)
-          fail++
+        }catch(e){
+          fail++; lastError = e?.message || String(e)
+          console.error('שורה נכשלה:', e, r)
         }
       }
-      setMsg(`ייבוא הושלם: ${ok} נוספו${fail ? `, ${fail} נכשלו` : ''}`)
-    } catch (e) {
+
+      setMsg(`ייבוא הושלם: ${ok} נוספו${fail?`, ${fail} נכשלו${lastError?` (אחרון: ${lastError})`:''}`:''}`)
+    }catch(e){
       console.error(e)
       setMsg('שגיאה בייבוא: ' + e.message)
     }
@@ -251,7 +329,7 @@ export default function Admin() {
     await updateDoc(doc(db, 'neighborhoods', n.id), { active: !n.active })
   }
 
-  /** ===== סינון מוצג ===== */
+  /** סינון מוצג */
   const visible = rows.filter(r => {
     if (filterStatus !== 'all' && r.status !== filterStatus) return false
     if (filterNeighborhood !== 'all') {
@@ -287,8 +365,7 @@ export default function Admin() {
           {neighborhoods.map(n => (
             <div key={n.id} className={`badge ${n.active ? 'badge-primary' : 'badge-ghost'} gap-2`}>
               {n.name}
-              <button className="btn btn-xs"
-                onClick={() => toggleNeighborhood(n)}>
+              <button className="btn btn-xs" onClick={() => toggleNeighborhood(n)}>
                 {n.active ? 'השבת' : 'הפעל'}
               </button>
             </div>
@@ -315,7 +392,12 @@ export default function Admin() {
           )}
         </select>
 
-        <input className="input input-bordered w-full" placeholder="חיפוש בשם/רחוב/טלפון" value={qtext} onChange={e => setQtext(e.target.value)} />
+        <input
+          className="input input-bordered w-full"
+          placeholder="חיפוש בשם/רחוב/טלפון"
+          value={qtext}
+          onChange={e => setQtext(e.target.value)}
+        />
       </div>
 
       {msg && <div className="alert mt-2"><span>{msg}</span></div>}
@@ -329,6 +411,8 @@ export default function Admin() {
               <th>כתובת</th>
               <th>שכונה</th>
               <th>טלפון</th>
+              <th>מס' נפשות</th>
+              <th>קוד כניסה</th>
               <th>סטטוס</th>
               <th>מתנדב</th>
               <th>פעולות</th>
@@ -344,6 +428,8 @@ export default function Admin() {
                 </td>
                 <td className="whitespace-nowrap">{r.address?.neighborhood || '—'}</td>
                 <td className="whitespace-nowrap">{r.phone || '—'}</td>
+                <td className="whitespace-nowrap">{r.householdSize ?? '—'}</td>
+                <td className="whitespace-nowrap">{r.address?.doorCode || '—'}</td>
                 <td className="whitespace-nowrap"><Badge status={r.status} /></td>
                 <td className="whitespace-nowrap">{r.assignedVolunteerId ? r.assignedVolunteerId.slice(0, 6) + '…' : '—'}</td>
                 <td className="flex gap-1">
@@ -359,7 +445,7 @@ export default function Admin() {
               </tr>
             ))}
             {visible.length === 0 && (
-              <tr><td colSpan="7" className="opacity-60">אין נתונים לתצוגה</td></tr>
+              <tr><td colSpan="9" className="opacity-60">אין נתונים לתצוגה</td></tr>
             )}
           </tbody>
         </table>
@@ -368,9 +454,9 @@ export default function Admin() {
   )
 }
 
-/** ===========================
+/** ─────────────────────────────────────────────────────────────
  *  קומפוננטות עזר
- *  =========================== */
+ *  ──────────────────────────────────────────────────────────── */
 function Wrap({ children }) {
   return <div dir="rtl" className="max-w-7xl mx-auto p-6">{children}</div>
 }
