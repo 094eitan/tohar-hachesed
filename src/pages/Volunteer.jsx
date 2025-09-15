@@ -25,44 +25,22 @@ export default function Volunteer(){
   const assignNow = async () => {
     setMsg('')
     try{
-      // מועמדים ממתינים בעיר חריש
-      const q = query(collection(db,'deliveries'), where('status','==','pending'), where('address.city','==', DEFAULT_CITY))
-      const snap = await getDocs(q)
+      const qy = query(collection(db,'deliveries'), where('status','==','pending'), where('address.city','==', DEFAULT_CITY))
+      const snap = await getDocs(qy)
       const candidates = []
-      snap.forEach(d=>{
-        const it = { id: d.id, ...d.data() }
-        candidates.push(it)
-      })
+      snap.forEach(d=> candidates.push({ id: d.id, ...d.data() }))
 
-      if(!candidates.length){
-        setMsg('לא נמצאו חבילות ממתינות בחריש')
-        return
-      }
+      if(!candidates.length){ setMsg('לא נמצאו חבילות ממתינות בחריש'); return }
 
-      // דירוג: קודם התאמת רחוב, אח"כ לפי מרחק אם יש lat/lng
       const target = street.trim()
       const withScore = candidates.map(d=>{
         const sameStreet = target && (d.address?.street || '').includes(target) ? 1 : 0
-        const dist = (d.address?.lat && d.address?.lng) ? 0 : 99999 // אם אין קואורדינטות—שלח לסוף
+        const dist = (d.address?.lat && d.address?.lng) ? 0 : 99999
         return { id:d.id, sameStreet, dist, raw:d }
       })
-
-      // אם יש lat/lng למועמדים וגם למתנדב אין—נישאר רק על sameStreet;
-      // אפשרות (לא חובה): להשתמש ב-Nominatim להמיר רחוב->latlng (חינמי) ואז לחשב מרחק אמיתי.
-
-      withScore.sort((a,b)=>{
-        if(b.sameStreet !== a.sameStreet) return b.sameStreet - a.sameStreet
-        return a.dist - b.dist
-      })
-
+      withScore.sort((a,b)=> (b.sameStreet - a.sameStreet) || (a.dist - b.dist))
       const chosen = withScore.slice(0, Math.max(0, Math.min(count, withScore.length)))
 
-      if(!chosen.length){
-        setMsg('לא נמצאו חבילות מתאימות')
-        return
-      }
-
-      // טרנזקציה לקוח—נעילה אטומית
       await runTransaction(db, async (tx)=>{
         for(const c of chosen){
           const ref = doc(db,'deliveries', c.id)
@@ -79,10 +57,7 @@ export default function Volunteer(){
       })
 
       setMsg(`שובצו ${chosen.length} חבילות`)
-    }catch(e){
-      console.error(e)
-      setMsg('שגיאה בשיבוץ: ' + e.message)
-    }
+    }catch(e){ setMsg('שגיאה בשיבוץ: ' + e.message) }
   }
 
   const setStatus = async (id, status) => {
@@ -90,30 +65,41 @@ export default function Volunteer(){
   }
 
   return (
-    <div dir="rtl" style={{maxWidth:900, margin:'24px auto'}}>
-      <h2>שלום מתנדב 👋</h2>
-      <div style={{display:'flex', gap:8, flexWrap:'wrap', marginBottom:12}}>
-        <input placeholder="רחוב מועדף (ב-חריש)" value={street} onChange={e=>setStreet(e.target.value)} />
-        <input type="number" min={1} value={count} onChange={e=>setCount(parseInt(e.target.value||'1'))} />
-        <button onClick={assignNow}>קבל שיבוץ</button>
+    <div dir="rtl" className="max-w-5xl mx-auto p-6">
+      <h2 className="text-xl font-semibold mb-3">שלום מתנדב 👋</h2>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        <input className="input input-bordered" placeholder="רחוב מועדף (ב-חריש)" value={street} onChange={e=>setStreet(e.target.value)} />
+        <input className="input input-bordered w-24" type="number" min={1} value={count} onChange={e=>setCount(parseInt(e.target.value||'1'))} />
+        <button className="btn btn-primary" onClick={assignNow}>קבל שיבוץ</button>
       </div>
 
-      {msg && <p style={{color:'#444'}}>{msg}</p>}
+      {msg && <div className="alert mt-2"><span>{msg}</span></div>}
 
-      <ol style={{marginTop:16}}>
+      <ol className="mt-4 space-y-3">
         {assigned.map((d,idx)=>(
-          <li key={d.id} style={{display:'grid', gridTemplateColumns:'40px 1fr 2fr 260px', gap:8, alignItems:'center', padding:'8px 0', borderBottom:'1px solid #eee'}}>
-            <div>#{idx+1}</div>
-            <div><b>{d.recipientName}</b></div>
-            <div>
-              {d.address?.street}, {d.address?.city}
-              {d.address?.apartment?` — ${d.address.apartment}`:''}
-            </div>
-            <div style={{display:'flex', gap:6, alignItems:'center'}}>
+          <li key={d.id} className="p-3 rounded-xl border flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="text-sm opacity-70">#{idx+1}</div>
               <Badge status={d.status}/>
-              <button onClick={()=>setStatus(d.id,'in_transit')}>בדרך</button>
-              <button onClick={()=>setStatus(d.id,'delivered')}>נמסרה</button>
-              <button onClick={()=>setStatus(d.id,'returned')}>חזרה</button>
+            </div>
+
+            <div className="font-semibold">{d.recipientName}</div>
+            <div>
+              {d.address?.street}, {d.address?.city}{d.address?.apartment?` — ${d.address.apartment}`:''}
+              {d.address?.lat && d.address?.lng && (
+                <a className="link link-primary mr-2"
+                   target="_blank"
+                   href={`https://www.google.com/maps?q=${d.address.lat},${d.address.lng}`}>
+                   פתח מפה
+                </a>
+              )}
+            </div>
+
+            <div className="join self-end">
+              <button className="btn join-item" onClick={()=>setStatus(d.id,'in_transit')}>בדרך</button>
+              <button className="btn join-item btn-success" onClick={()=>setStatus(d.id,'delivered')}>נמסרה</button>
+              <button className="btn join-item btn-error" onClick={()=>setStatus(d.id,'returned')}>חזרה</button>
             </div>
           </li>
         ))}
@@ -123,7 +109,13 @@ export default function Volunteer(){
 }
 
 function Badge({status}){
-  const colors = { pending:'#d2b48c', assigned:'#f9c74f', in_transit:'#90be6d', delivered:'#43aa8b', returned:'#f94144' }
   const he = { pending:'ממתין', assigned:'הוקצה', in_transit:'בדרך', delivered:'נמסרה', returned:'חזרה למחסן' }
-  return <span style={{background:colors[status]||'#ccc', padding:'4px 8px', borderRadius:8}}>{he[status]||status}</span>
+  const color = {
+    pending:'badge-warning',
+    assigned:'badge-info',
+    in_transit:'badge-accent',
+    delivered:'badge-success',
+    returned:'badge-error'
+  }[status] || 'badge-ghost'
+  return <span className={`badge ${color}`}>{he[status]||status}</span>
 }

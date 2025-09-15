@@ -14,16 +14,14 @@ export default function Login() {
   const [msg, setMsg] = useState('')
   const [mode, setMode] = useState('login') // 'login' | 'signup'
 
-  const goVolunteer = () => { window.location.href = '/volunteer' }
+  const goVolunteer = () => (window.location.href = '/volunteer')
 
   const doLogin = async () => {
     setMsg('')
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password)
       goVolunteer()
-    } catch (e) {
-      setMsg(prettyErr(e))
-    }
+    } catch (e) { setMsg(heError(e)) }
   }
 
   const doSignup = async () => {
@@ -32,67 +30,57 @@ export default function Login() {
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password)
       if (name.trim()) await updateProfile(cred.user, { displayName: name.trim() })
       goVolunteer()
-    } catch (e) {
-      setMsg(prettyErr(e))
-    }
+    } catch (e) { setMsg(heError(e)) }
   }
 
   const doAnon = async () => {
     setMsg('')
-    try {
-      await signInAnonymously(auth)
-      goVolunteer()
-    } catch (e) {
-      setMsg(prettyErr(e))
-    }
+    try { await signInAnonymously(auth); goVolunteer() }
+    catch (e) { setMsg(heError(e)) }
   }
 
   return (
-    <div dir="rtl" style={{maxWidth:420, margin:'40px auto', padding:16, border:'1px solid #eee', borderRadius:12}}>
-      <h2 style={{marginTop:0}}>טוהר החסד — כניסה</h2>
+    <div dir="rtl" className="max-w-md mx-auto mt-10 p-6 rounded-2xl border bg-base-100 shadow">
+      <h2 className="text-2xl font-semibold mb-4">טוהר החסד — כניסה</h2>
 
-      <div style={{display:'flex', gap:8, marginBottom:12}}>
-        <button onClick={()=>setMode('login')}  style={tab(mode==='login')}>כניסה במייל</button>
-        <button onClick={()=>setMode('signup')} style={tab(mode==='signup')}>הרשמה</button>
+      <div className="join mb-4">
+        <button onClick={()=>setMode('login')}  className={`btn join-item ${mode==='login'?'btn-primary':''}`}>כניסה במייל</button>
+        <button onClick={()=>setMode('signup')} className={`btn join-item ${mode==='signup'?'btn-primary':''}`}>הרשמה</button>
       </div>
 
       {mode === 'signup' && (
         <>
-          <label>שם (אופציונלי)</label>
-          <input value={name} onChange={e=>setName(e.target.value)} style={input}/>
+          <label className="label"><span className="label-text">שם (אופציונלי)</span></label>
+          <input className="input input-bordered w-full mb-3" value={name} onChange={e=>setName(e.target.value)} />
         </>
       )}
 
-      <label>אימייל</label>
-      <input value={email} onChange={e=>setEmail(e.target.value)} style={input} />
+      <label className="label"><span className="label-text">אימייל</span></label>
+      <input className="input input-bordered w-full mb-3" value={email} onChange={e=>setEmail(e.target.value)} />
 
-      <label>סיסמה</label>
-      <input type="password" value={password} onChange={e=>setPassword(e.target.value)} style={input} />
+      <label className="label"><span className="label-text">סיסמה</span></label>
+      <input type="password" className="input input-bordered w-full mb-3" value={password} onChange={e=>setPassword(e.target.value)} />
 
       {mode === 'login'
-        ? <button onClick={doLogin} style={btn}>התחבר</button>
-        : <button onClick={doSignup} style={btn}>הרשמה</button>
+        ? <button onClick={doLogin} className="btn btn-primary w-full">התחבר</button>
+        : <button onClick={doSignup} className="btn btn-primary w-full">הרשמה</button>
       }
 
-      <div style={{marginTop:12}}>
-        <button onClick={doAnon} style={{...btn, background:'#888'}}>כניסה אנונימית</button>
+      <div className="mt-3">
+        <button onClick={doAnon} className="btn w-full">כניסה אנונימית</button>
       </div>
 
-      {msg && <p style={{color:'#b00020', marginTop:12}}>{msg}</p>}
+      {msg && <div className="alert alert-error mt-3"><span>{msg}</span></div>}
 
-      <small style={{display:'block', marginTop:16, color:'#555'}}>
-        כדי להפוך לאדמין: לאחר ההתחברות הראשונה, צור ב-Firestore אוסף <code>admins</code> ומסמך עם
-        <code> Document ID = ה-UID שלך</code> (רואים אותו ב-Authentication → Users).
+      <small className="block mt-3 text-gray-500">
+        כדי להיות אדמין: לאחר ההתחברות הראשונה, צור ב-Firestore אוסף <code>admins</code> ומסמך עם
+        <code> Document ID = ה-UID שלך</code> (Authentication → Users).
       </small>
     </div>
   )
 }
 
-const input = { width:'100%', margin:'4px 0 12px 0', padding:8 }
-const btn = { padding:'8px 12px', border:'none', background:'#2f6feb', color:'#fff', borderRadius:8, cursor:'pointer' }
-const tab = (active) => ({ padding:'6px 10px', borderRadius:8, border:'1px solid #ddd', background: active ? '#e8f0fe' : '#fff', cursor:'pointer' })
-
-function prettyErr(e){
+function heError(e) {
   const c = e?.code || ''
   if (c.includes('auth/invalid-email')) return 'אימייל לא תקין'
   if (c.includes('auth/missing-password')) return 'נא להזין סיסמה'

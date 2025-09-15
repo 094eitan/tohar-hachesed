@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { auth } from './lib/firebase'
-import { onAuthStateChanged } from 'firebase/auth'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
 import Login from './pages/Login.jsx'
 import Volunteer from './pages/Volunteer.jsx'
 import Admin from './pages/Admin.jsx'
 
 export default function App() {
-  const [user, setUser] = useState(undefined) // undefined = עדיין טוען, null = לא מחובר
+  const [user, setUser] = useState(undefined) // undefined=טוען, null=לא מחובר
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, u => setUser(u || null))
@@ -15,21 +15,25 @@ export default function App() {
   }, [])
 
   if (user === undefined) {
-    // בזמן טעינת סטטוס התחברות – מונע מסך לבן
-    return (
-      <div dir="rtl" style={{padding:24}}>
-        <b>טוען…</b>
-      </div>
-    )
+    return <div dir="rtl" className="p-6">טוען…</div>
   }
 
   return (
     <BrowserRouter>
-      {/* ניווט קטן לנוחות פיתוח */}
-      <nav style={{display:'flex', gap:12, padding:12, borderBottom:'1px solid #eee'}}>
-        <Link to="/login">Login</Link>
-        <Link to="/volunteer">Volunteer</Link>
-        <Link to="/admin">Admin</Link>
+      <nav className="navbar bg-base-100 border-b">
+        <div className="flex-1">
+          <span className="btn btn-ghost text-xl">טוהר החסד</span>
+        </div>
+        <div className="flex gap-2">
+          <Link className="btn btn-ghost" to="/login">כניסה</Link>
+          <Link className="btn btn-ghost" to="/volunteer">מתנדב</Link>
+          <Link className="btn btn-ghost" to="/admin">אדמין</Link>
+          {user && (
+            <button className="btn btn-outline" onClick={()=>signOut(auth)}>
+              התנתק
+            </button>
+          )}
+        </div>
       </nav>
 
       <Routes>
@@ -49,5 +53,5 @@ function Protected({ user, children }) {
 }
 
 function NotFound() {
-  return <div dir="rtl" style={{padding:24}}>עמוד לא נמצא</div>
+  return <div dir="rtl" className="p-6">עמוד לא נמצא</div>
 }
