@@ -44,53 +44,72 @@ export default function Landing() {
 
   const doAnon = async () => {
     setMsg('')
-    try {
-      const cred = await signInAnonymously(auth)
-      await redirectAfterLogin(cred.user)
-    } catch (e) { setMsg(prettyErr(e)) }
+    try { const cred = await signInAnonymously(auth); await redirectAfterLogin(cred.user) }
+    catch (e) { setMsg(prettyErr(e)) }
   }
 
   return (
     <div dir="rtl" className="max-w-6xl mx-auto p-6 grid md:grid-cols-2 gap-6">
-      {/* צד מידע על העמותה */}
-      <section className="p-6 rounded-2xl border bg-base-100 shadow">
-        <h1 className="text-2xl font-bold mb-2">טוהר החסד</h1>
-        <p className="mb-2">
-          העמותה מסייעת למשפחות נזקקות בחלוקת מזון, במיוחד סביב החגים.
-        </p>
-        <ul className="list-disc pr-5 space-y-1 text-sm opacity-80">
-          <li>שמירה על פרטיות: מתנדב רואה רק משלוחים שהוקצו לו.</li>
-          <li>ניהול חכם לאדמין: ייבוא כתובות, סטטוסים, מעקב.</li>
-          <li>בלי עלות: משתמשים ב־Firebase מסלול חינמי.</li>
-        </ul>
-      </section>
-
-      {/* צד כניסה/הרשמה */}
-      <section className="p-6 rounded-2xl border bg-base-100 shadow">
-        <h2 className="text-xl font-semibold mb-4">התחברות/הרשמה</h2>
-
-        <div className="join mb-4">
-          <button onClick={()=>setMode('login')}  className={`btn join-item ${mode==='login'?'btn-primary':''}`}>כניסה במייל</button>
-          <button onClick={()=>setMode('signup')} className={`btn join-item ${mode==='signup'?'btn-primary':''}`}>הרשמה</button>
+      {/* ===== צד מידע / אודות ===== */}
+      <section className="p-6 rounded-2xl border bg-base-100 shadow flex flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <img src="/favicon.png" alt="טוהר החסד" className="w-12 h-12 rounded-xl" />
+          <h1 className="text-2xl font-bold">טוהר החסד</h1>
         </div>
 
-        {mode === 'signup' && (
-          <>
-            <label className="label"><span className="label-text">שם (אופציונלי)</span></label>
-            <input className="input input-bordered w-full mb-3" value={name} onChange={e=>setName(e.target.value)} />
-          </>
-        )}
+        {/* כאן ישאר ריק עד שתקבל תיאור מהבעלים */}
+        <div className="prose max-w-none text-sm opacity-80">
+          {/* הסבר על העמותה – יוכנס בהמשך */}
+        </div>
 
-        <label className="label"><span className="label-text">אימייל</span></label>
-        <input className="input input-bordered w-full mb-3" value={email} onChange={e=>setEmail(e.target.value)} />
+        <div className="mt-2">
+          <a href="tel:0523000676" className="btn btn-primary w-full md:w-auto">
+            📞 צור קשר: 052-300-0676
+          </a>
+        </div>
+      </section>
 
-        <label className="label"><span className="label-text">סיסמה</span></label>
-        <input type="password" className="input input-bordered w-full mb-3" value={password} onChange={e=>setPassword(e.target.value)} />
+      {/* ===== צד כניסה / הרשמה ===== */}
+      <section className="p-6 rounded-2xl border bg-base-100 shadow">
+        <h2 className="text-xl font-semibold mb-4">התחברות / הרשמה</h2>
 
-        {mode === 'login'
-          ? <button onClick={doLogin} className="btn btn-primary w-full">התחבר</button>
-          : <button onClick={doSignup} className="btn btn-primary w-full">הרשמה</button>
-        }
+        <div className="join mb-4">
+          <button
+            onClick={()=>setMode('login')}
+            className={`btn join-item ${mode==='login'?'btn-primary':''}`}
+          >
+            כניסה במייל
+          </button>
+          <button
+            onClick={()=>setMode('signup')}
+            className={`btn join-item ${mode==='signup'?'btn-primary':''}`}
+          >
+            הרשמה
+          </button>
+        </div>
+
+        {/* מרווחים מסודרים כדי שהלייבלים לא "יידבקו" לטאבים */}
+        <div className="space-y-2">
+          {mode === 'signup' && (
+            <>
+              <label className="label mt-1"><span className="label-text">שם (אופציונלי)</span></label>
+              <input className="input input-bordered w-full" value={name} onChange={e=>setName(e.target.value)} />
+            </>
+          )}
+
+          <label className="label mt-1"><span className="label-text">אימייל</span></label>
+          <input className="input input-bordered w-full" value={email} onChange={e=>setEmail(e.target.value)} />
+
+          <label className="label mt-1"><span className="label-text">סיסמה</span></label>
+          <input type="password" className="input input-bordered w-full" value={password} onChange={e=>setPassword(e.target.value)} />
+        </div>
+
+        <div className="mt-4">
+          {mode === 'login'
+            ? <button onClick={doLogin} className="btn btn-primary w-full">התחבר</button>
+            : <button onClick={doSignup} className="btn btn-primary w-full">הרשמה</button>
+          }
+        </div>
 
         <div className="mt-3">
           <button onClick={doAnon} className="btn w-full">כניסה אנונימית</button>
