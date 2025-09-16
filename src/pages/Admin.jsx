@@ -186,7 +186,7 @@ export default function Admin() {
           const apt = pick(r, synonyms.apartment)
           const ent = pick(r, synonyms.entrance)
           const flr = pick(r, synonyms.floor)
-          const aptParts = []; if(apt) aptParts.push(apt); if(ent) aptParts.push(`כניסה ${ent}`); if(flr) aptParts.push(`קומה ${flr}`)
+          const aptParts = []; if(apt) aptParts.push(apt); if(ent) aptParts.push(`כניסה ${ent}`); if(flr) aptParts.push(`קומה ${flר}`)
           const apartment = aptParts.join(' ').trim() || ''
           const phone         = pick(r, synonyms.phone)
           const packageCount  = coerceNumber(pick(r, synonyms.packageCount), 1)
@@ -310,6 +310,24 @@ export default function Admin() {
     await ensurePendingIndex(id, nb)
   }
 
+  // שחזור/בניית אינדקס
+  async function rebuildPendingIndex(){
+    setMsg('בונה אינדקס "ממתינים" מחדש…')
+    const idxSnap = await getDocs(collection(db,'pending_index'))
+    for (const d of idxSnap.docs) await deleteDoc(d.ref).catch(()=>{})
+    const delSnap = await getDocs(collection(db,'deliveries'))
+    let made = 0
+    for (const d of delSnap.docs){
+      const v = d.data()
+      const nb = v?.address?.neighborhood || ''
+      if (v?.status === 'pending' && (!v?.assignedVolunteerId)) {
+        await setDoc(doc(db,'pending_index', d.id), { neighborhood: nb, createdAt: serverTimestamp() }, { merge:true })
+        made++
+      }
+    }
+    setMsg(`אינדקס נבנה: ${made} משלוחים פנויים`)
+  }
+
   /* ---------- סינון/סיכומים ---------- */
   const visible = rows.filter(r=>{
     if (filterStatus!=='all' && r.status!==filterStatus) return false
@@ -342,6 +360,7 @@ export default function Admin() {
         <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" hidden onChange={e=>e.target.files[0]&&importFile(e.target.files[0])}/>
         <button className="btn btn-outline" onClick={addNeighborhood}>הוסף שכונה</button>
         <button className="btn btn-outline" onClick={syncNeighborhoodsFromDeliveries}>סנכרן שכונות</button>
+        <button className="btn btn-outline" onClick={rebuildPendingIndex}>שחזר אינדקס ממתינים</button>
         <button className="btn btn-outline btn-error" onClick={deleteAll}>מחק הכל</button>
       </div>
 
