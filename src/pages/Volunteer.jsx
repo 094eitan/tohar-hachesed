@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth, db, serverTimestamp } from '../lib/firebase'
 import {
-  collection, doc, getDocs, onSnapshot, query, updateDoc, where
+  collection, doc, getDocs, onSnapshot, query, updateDoc, where, deleteDoc, limit
 } from 'firebase/firestore'
 
 export default function Volunteer() {
@@ -35,17 +35,14 @@ export default function Volunteer() {
     return () => un()
   }, [])
 
-  // ממתינים לכל שכונה
+  // ספירות "ממתין" לפי שכונה מתוך pending_index (בלי לחשוף פרטי אנשים)
   const [pendingCounts, setPendingCounts] = useState({})
   useEffect(() => {
-    const qDel = query(collection(db, 'deliveries'), where('status','==','pending'))
-    const un = onSnapshot(qDel, snap => {
+    const un = onSnapshot(collection(db,'pending_index'), snap => {
       const counts={}
       snap.forEach(d=>{
-        const r = {id:d.id, ...d.data()}
-        const nb = r.address?.neighborhood || ''
+        const nb = d.data()?.neighborhood || ''
         if (!nb) return
-        if (r.assignedVolunteerId) return
         counts[nb] = (counts[nb]||0)+1
       })
       setPendingCounts(counts)
@@ -58,7 +55,7 @@ export default function Volunteer() {
   const [wantedCount, setWantedCount] = useState(1)
   const [msg, setMsg] = useState('')
 
-  // המשימות שלי (ללא orderBy → מיון מקומי)
+  // המשלוחים שלי
   const [my, setMy] = useState([])
   useEffect(() => {
     if (!user) return
@@ -76,49 +73,50 @@ export default function Volunteer() {
     return () => un()
   }, [user])
 
+  // CLAIM דרך pending_index
   async function claimAssignments() {
     if (!user) return
     if (!selectedNeighborhood) { setMsg('בחר שכונה'); return }
     const want = Math.max(1, Number(wantedCount||1))
     setMsg('מנסה לשבץ…')
 
-    const qP = query(
-      collection(db,'deliveries'),
-      where('status','==','pending'),
-      where('address.neighborhood','==', selectedNeighborhood)
+    // קח מזהים מהאינדקס לשכונה הזו
+    const qIds = query(
+      collection(db,'pending_index'),
+      where('neighborhood', '==', selectedNeighborhood),
+      limit(want * 3) // קצת ספייר למירוצים
     )
-    const snap = await getDocs(qP)
-    const pool=[]
-    snap.forEach(d=>{
-      const r = {id:d.id, ...d.data()}
-      if (r.assignedVolunteerId) return
-      pool.push(r)
-    })
+    const snap = await getDocs(qIds)
+    if (snap.empty) { setMsg('אין משלוחים זמינים בשכונה הזו כרגע'); return }
 
-    if (!pool.length) { setMsg('אין משלוחים זמינים בשכונה הזו כרגע'); return }
-
-    const chosen = pool.slice(0, want)
-    let ok=0
-    for (const r of chosen) {
+    let ok = 0
+    for (const docIdx of snap.docs) {
+      if (ok >= want) break
+      const id = docIdx.id
       try {
-        await updateDoc(doc(db,'deliveries', r.id), {
+        // נסה לתפוס אם עדיין פנוי
+        await updateDoc(doc(db,'deliveries', id), {
           assignedVolunteerId: user.uid,
           status: 'assigned',
           updatedAt: serverTimestamp()
         })
+        // הצליח → מחק מהאינדקס
+        await deleteDoc(doc(db,'pending_index', id)).catch(()=>{})
         ok++
-      } catch(e) {
-        console.error('assign fail', e)
+      } catch (e) {
+        // מישהו הקדים אותנו / הרשאות – נמשיך ל־ID הבא
+        console.debug('claim failed for', id, e?.message)
       }
     }
-    setMsg(`שובצו ${ok} משלוחים${ok<want?` (אין מספיק זמינים כרגע)`:''}`)
+
+    setMsg(ok ? `שובצו ${ok} משלוחים` : 'לא הצלחתי לשבץ, נסה שוב בעוד רגע')
   }
 
   async function setStatus(id, status) {
     await updateDoc(doc(db,'deliveries', id), { status, updatedAt: serverTimestamp() })
   }
 
-  // שחרור שיבוץ – כמו אצל אדמין (לעצמו בלבד לפי החוקים)
+  // שחרור שיבוץ (לעצמו בלבד)
   async function releaseAssignment(id) {
     if (!confirm('לשחרר את המשלוח הזה מהשיבוץ שלך?')) return
     await updateDoc(doc(db,'deliveries', id), {
@@ -126,6 +124,9 @@ export default function Volunteer() {
       assignedVolunteerId: null,
       updatedAt: serverTimestamp()
     })
+    // אין צורך ליצור מחדש אינדקס כאן — כללי האדמין כבר דואגים לזה כשהוא מחזיר ל-pending.
+    // אם תרצה שגם מתנדב ייצור אינדקס, אפשר להוסיף:
+    // await setDoc(doc(db,'pending_index', id), { neighborhood: d.address?.neighborhood||'', createdAt: serverTimestamp() }, { merge:true })
   }
 
   if (!user || user.isAnonymous) return null

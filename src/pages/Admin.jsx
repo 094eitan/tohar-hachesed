@@ -3,11 +3,11 @@ import React, { useEffect, useRef, useState } from 'react'
 import { auth, db, serverTimestamp } from '../lib/firebase'
 import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc,
-  query, orderBy, getDoc, setDoc, getDocs
+  query, orderBy, getDoc, setDoc, getDocs, limit
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 
-/* ---- הרשאת אדמין ---- */
+/* ---------- הרשאת אדמין ---------- */
 async function isAdmin() {
   const uid = auth.currentUser?.uid
   if (!uid) return false
@@ -16,7 +16,7 @@ async function isAdmin() {
   return snap.exists()
 }
 
-/* ---- עזרי CSV/XLSX ---- */
+/* ---------- עזרי CSV/XLSX ---------- */
 const synonyms = {
   recipientName: ['Name','שם','שם מלא','שם הנזקק','מקבל','נזקק'],
   streetFull:    ['כתובת','כתובת מלאה','רחוב ומספר','רחוב+מספר'],
@@ -52,7 +52,7 @@ function findHeaderRow(rows2D){
   return 0
 }
 
-/* ---- קומפוננטת אדמין ---- */
+/* ---------- קומפוננטה ---------- */
 export default function Admin() {
   const [allowed, setAllowed] = useState(false)
   const [rows, setRows] = useState([])
@@ -86,11 +86,29 @@ export default function Admin() {
   if (!allowed) return (
     <Wrap>
       <h3 className="text-lg font-semibold mb-2">אין לך הרשאת אדמין</h3>
-      <p>ב־Firestore צור אוסף <code>admins</code> ומסמך עם ה־UID שלך (שדה <code>role: "admin"</code>).</p>
+      <p>ב־Firestore צור אוסף <code>admins</code> ומסמך עם ה־UID שלך (לדוגמה שדה <code>role: "admin"</code>).</p>
     </Wrap>
   )
 
-  /* ---- פעולות ---- */
+  /* ---------- עזרי אינדקס לפנויים ---------- */
+  async function ensurePendingIndex(id, neighborhood) {
+    await setDoc(doc(db,'pending_index', id), {
+      neighborhood: neighborhood || '',
+      createdAt: serverTimestamp()
+    }, { merge: true })
+  }
+  async function removePendingIndex(id){
+    await deleteDoc(doc(db,'pending_index', id)).catch(()=>{})
+  }
+  async function syncPendingIndexFor(id, nextStatus, nextAssigned, nextNeighborhood){
+    if (nextStatus === 'pending' && (nextAssigned == null || nextAssigned === '')) {
+      await ensurePendingIndex(id, nextNeighborhood)
+    } else {
+      await removePendingIndex(id)
+    }
+  }
+
+  /* ---------- פעולות ---------- */
   const addDelivery = async () => {
     const recipientName = prompt('שם נזקק:'); if (!recipientName) return
     const streetName = prompt('רחוב:'); if (!streetName) return
@@ -114,7 +132,7 @@ export default function Admin() {
     if (apartment) address.apartment = apartment
     if (doorCode) address.doorCode = doorCode
 
-    await addDoc(collection(db,'deliveries'), {
+    const ref = await addDoc(collection(db,'deliveries'), {
       recipientName, address, phone,
       packageCount: isNaN(pkg)?1:pkg,
       notes, status:'pending',
@@ -122,11 +140,11 @@ export default function Admin() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     })
-
     if (neighborhood) {
       const id = neighborhood.trim().toLowerCase().replace(/\s+/g,'-')
       await setDoc(doc(db,'neighborhoods',id), { name: neighborhood.trim(), active:true, order:0 }, { merge:true })
     }
+    await ensurePendingIndex(ref.id, address.neighborhood || '')
   }
 
   async function importFile(file){
@@ -134,7 +152,6 @@ export default function Admin() {
     try{
       const ext = file.name.toLowerCase().split('.').pop()
       let rawObjects = []
-      let sheetNeighborhoods = []
 
       if (ext==='csv'){
         rawObjects = csvToObjects(await file.text())
@@ -147,13 +164,6 @@ export default function Admin() {
         const headers = rows2D[headerRowIdx].map(h=>String(h||'').trim())
         const dataRows = rows2D.slice(headerRowIdx+1).filter(r=>r.some(c=>String(c).trim()!==''))
         rawObjects = dataRows.map((r,idx)=>{ const o={}; headers.forEach((h,i)=>o[h]=(r[i]??'').toString().trim()); o.__rowIndex = headerRowIdx+2+idx; return o })
-
-        const sheetName = wb.SheetNames.find(n => norm(n)===norm('שכונות'))
-        if (sheetName){
-          const sh = wb.Sheets[sheetName]
-          const arr = XLSX.utils.sheet_to_json(sh,{header:1,defval:''})
-          sheetNeighborhoods = arr.map(r=>String(r?.[0]||'').trim()).filter(x=>x && x!=='שכונה' && x!=='שם שכונה')
-        }
       } else {
         throw new Error('קובץ לא נתמך (בחר CSV/XLSX/XLS)')
       }
@@ -161,7 +171,6 @@ export default function Admin() {
       if (!rawObjects.length){ setMsg('קובץ ריק'); return }
 
       let ok=0, fail=0, lastError=''
-      const seenNeighborhoods = new Set(sheetNeighborhoods.map(n=>n.trim()))
 
       for (const r of rawObjects){
         try{
@@ -189,28 +198,27 @@ export default function Admin() {
           if (!recipientName || !street) throw new Error('שם וכתובת חובה')
 
           const address = { street, city }
-          if (neighborhood) { address.neighborhood = neighborhood; seenNeighborhoods.add(neighborhood.trim()) }
+          if (neighborhood) address.neighborhood = neighborhood
           if (apartment) address.apartment = apartment
           if (doorCode) address.doorCode = doorCode
 
-          await addDoc(collection(db,'deliveries'), {
+          const ref = await addDoc(collection(db,'deliveries'), {
             recipientName, address, phone, packageCount, notes,
             householdSize, campaign,
             status:'pending', assignedVolunteerId:null,
             createdAt: serverTimestamp(), updatedAt: serverTimestamp()
           })
+          if (neighborhood) {
+            const id = neighborhood.trim().toLowerCase().replace(/\s+/g,'-')
+            await setDoc(doc(db,'neighborhoods',id), { name: neighborhood.trim(), active:true, order:0 }, { merge:true })
+          }
+          await ensurePendingIndex(ref.id, address.neighborhood || '')
           ok++
         }catch(e){
           fail++; lastError = e?.message || String(e)
-          setImportErrors(prev=>[...prev, { index:r.__rowIndex??null, reason:lastError, raw:r }])
+          setImportErrors(prev=>[...prev, { reason:lastError, raw:r }])
           console.error('שורה נכשלה:', e, r)
         }
-      }
-
-      for (const name of seenNeighborhoods){
-        const clean = name.trim(); if (!clean) continue
-        const id = clean.toLowerCase().replace(/\s+/g,'-')
-        await setDoc(doc(db,'neighborhoods',id), { name: clean, active:true, order:0 }, { merge:true })
       }
 
       setMsg(`ייבוא הושלם: ${ok} נוספו${fail?`, ${fail} נכשלו${lastError?` (אחרון: ${lastError})`:''}`:''}`)
@@ -222,6 +230,7 @@ export default function Admin() {
   const deleteOne = async (id) => {
     if (!confirm('למחוק את הרשומה הזו?')) return
     await deleteDoc(doc(db,'deliveries',id))
+    await removePendingIndex(id)
   }
 
   const deleteAll = async () => {
@@ -232,12 +241,17 @@ export default function Admin() {
     setMsg('מוחק הכל…')
     const snap = await getDocs(collection(db,'deliveries'))
     let n=0
-    for (const d of snap.docs){ await deleteDoc(d.ref); n++ }
+    for (const d of snap.docs){ await deleteDoc(d.ref); await removePendingIndex(d.id); n++ }
     setMsg(`נמחקו ${n} רשומות`)
   }
 
   const updateStatus = async (id, status) => {
-    await updateDoc(doc(db,'deliveries',id), { status, updatedAt: serverTimestamp() })
+    const ref = doc(db,'deliveries',id)
+    const snap = await getDoc(ref)
+    if (!snap.exists()) return
+    const cur = snap.data()
+    await updateDoc(ref, { status, updatedAt: serverTimestamp() })
+    await syncPendingIndexFor(id, status, cur.assignedVolunteerId, cur.address?.neighborhood || '')
   }
 
   async function updateAddressField(id, key, value){
@@ -248,10 +262,13 @@ export default function Admin() {
     const address = { ...(cur.address||{}) }
     address[key] = value
     await updateDoc(ref, { address, updatedAt: serverTimestamp() })
-    if (key==='neighborhood' && value && value.trim()){
-      const name = value.trim()
-      const nid = name.toLowerCase().replace(/\s+/g,'-')
-      await setDoc(doc(db,'neighborhoods',nid), { name, active:true, order:0 }, { merge:true })
+    if (key==='neighborhood'){
+      const name = (value||'').trim()
+      if (name){
+        const nid = name.toLowerCase().replace(/\s+/g,'-')
+        await setDoc(doc(db,'neighborhoods',nid), { name, active:true, order:0 }, { merge:true })
+      }
+      await syncPendingIndexFor(id, cur.status, cur.assignedVolunteerId, name)
     }
   }
 
@@ -276,25 +293,24 @@ export default function Admin() {
       const nb = d.data()?.address?.neighborhood
       if (nb && String(nb).trim()) setN.add(String(nb).trim())
     })
-    let created = 0
     for (const name of setN){
       const id = name.toLowerCase().replace(/\s+/g,'-')
       await setDoc(doc(db,'neighborhoods',id), { name, active: true, order:0 }, { merge:true })
-      created++
     }
-    alert(`הסתנכרן! נמצאו ${setN.size} שכונות, עודכנו/נוצרו ${created}.`)
+    alert(`הסתנכרן! נמצאו ${setN.size} שכונות.`)
   }
 
-  // *** חדש: שחרור שיבוץ מצד אדמין ***
+  // שחרור ע"י אדמין
   async function releaseAssignmentAdmin(id) {
-    await updateDoc(doc(db, 'deliveries', id), {
-      status: 'pending',
-      assignedVolunteerId: null,
-      updatedAt: serverTimestamp()
-    })
+    const ref = doc(db, 'deliveries', id)
+    const snap = await getDoc(ref)
+    if (!snap.exists()) return
+    const nb = snap.data()?.address?.neighborhood || ''
+    await updateDoc(ref, { status: 'pending', assignedVolunteerId: null, updatedAt: serverTimestamp() })
+    await ensurePendingIndex(id, nb)
   }
 
-  /* ---- סינון/סיכומים ---- */
+  /* ---------- סינון/סיכומים ---------- */
   const visible = rows.filter(r=>{
     if (filterStatus!=='all' && r.status!==filterStatus) return false
     if (filterNeighborhood!=='all'){
@@ -371,18 +387,17 @@ export default function Admin() {
           <div className="font-semibold mb-2">שגיאות בייבוא ({importErrors.length}):</div>
           <div className="max-h-52 overflow-auto text-sm">
             <table className="table table-sm">
-              <thead><tr><th>#</th><th>שורה בקובץ</th><th>סיבה</th><th>RAW</th></tr></thead>
+              <thead><tr><th>#</th><th>סיבה</th><th>RAW</th></tr></thead>
               <tbody>
-                {importErrors.slice(0,100).map((e,i)=>(
+                {importErrors.slice(0,150).map((e,i)=>(
                   <tr key={i}>
-                    <td>{i+1}</td><td>{e.index??'—'}</td>
+                    <td>{i+1}</td>
                     <td className="text-error">{e.reason}</td>
                     <td className="opacity-70">{JSON.stringify(e.raw)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {importErrors.length>100 && <div className="mt-1 text-xs opacity-60">מוצגות 100 הראשונות…</div>}
           </div>
         </div>
       )}
@@ -460,7 +475,7 @@ export default function Admin() {
   )
 }
 
-/* ---- עזרי UI ---- */
+/* ---------- UI helpers ---------- */
 function Wrap({children}){ return <div dir="rtl" className="max-w-7xl mx-auto p-6">{children}</div> }
 function Badge({status}){
   const he = { pending:'ממתין', assigned:'הוקצה', in_transit:'בדרך', delivered:'נמסרה', returned:'חזרה למחסן' }
