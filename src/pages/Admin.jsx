@@ -3,11 +3,11 @@ import React, { useEffect, useRef, useState } from 'react'
 import { auth, db, serverTimestamp } from '../lib/firebase'
 import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc,
-  query, orderBy, getDoc, setDoc, getDocs, where
+  query, orderBy, getDoc, setDoc, getDocs
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 
-/* ----------------- הרשאת אדמין ----------------- */
+/* ---- הרשאת אדמין ---- */
 async function isAdmin() {
   const uid = auth.currentUser?.uid
   if (!uid) return false
@@ -16,7 +16,7 @@ async function isAdmin() {
   return snap.exists()
 }
 
-/* ----------------- עזרי CSV/XLSX ----------------- */
+/* ---- עזרי CSV/XLSX ---- */
 const synonyms = {
   recipientName: ['Name','שם','שם מלא','שם הנזקק','מקבל','נזקק'],
   streetFull:    ['כתובת','כתובת מלאה','רחוב ומספר','רחוב+מספר'],
@@ -52,7 +52,7 @@ function findHeaderRow(rows2D){
   return 0
 }
 
-/* ----------------- הקומפוננטה ----------------- */
+/* ---- קומפוננטת אדמין ---- */
 export default function Admin() {
   const [allowed, setAllowed] = useState(false)
   const [rows, setRows] = useState([])
@@ -70,12 +70,10 @@ export default function Admin() {
       const ok = await isAdmin()
       setAllowed(ok)
       if (!ok) return
-
       const qDeliv = query(collection(db,'deliveries'), orderBy('createdAt','desc'))
       unsubDeliveries = onSnapshot(qDeliv, snap=>{
         const a=[]; snap.forEach(d=>a.push({id:d.id, ...d.data()})); setRows(a)
       })
-
       const qN = query(collection(db,'neighborhoods'), orderBy('name'))
       unsubNeighborhoods = onSnapshot(qN, snap=>{
         const a=[]; snap.forEach(d=>a.push({id:d.id, ...d.data()})); setNeighborhoods(a)
@@ -92,7 +90,7 @@ export default function Admin() {
     </Wrap>
   )
 
-  /* ---------- פעולות ---------- */
+  /* ---- פעולות ---- */
   const addDelivery = async () => {
     const recipientName = prompt('שם נזקק:'); if (!recipientName) return
     const streetName = prompt('רחוב:'); if (!streetName) return
@@ -150,7 +148,6 @@ export default function Admin() {
         const dataRows = rows2D.slice(headerRowIdx+1).filter(r=>r.some(c=>String(c).trim()!==''))
         rawObjects = dataRows.map((r,idx)=>{ const o={}; headers.forEach((h,i)=>o[h]=(r[i]??'').toString().trim()); o.__rowIndex = headerRowIdx+2+idx; return o })
 
-        // גיליון "שכונות" – אופציונלי
         const sheetName = wb.SheetNames.find(n => norm(n)===norm('שכונות'))
         if (sheetName){
           const sh = wb.Sheets[sheetName]
@@ -202,7 +199,6 @@ export default function Admin() {
             status:'pending', assignedVolunteerId:null,
             createdAt: serverTimestamp(), updatedAt: serverTimestamp()
           })
-
           ok++
         }catch(e){
           fail++; lastError = e?.message || String(e)
@@ -211,7 +207,6 @@ export default function Admin() {
         }
       }
 
-      // יצירת שכונות אוטומטית
       for (const name of seenNeighborhoods){
         const clean = name.trim(); if (!clean) continue
         const id = clean.toLowerCase().replace(/\s+/g,'-')
@@ -229,7 +224,6 @@ export default function Admin() {
     await deleteDoc(doc(db,'deliveries',id))
   }
 
-  // מחיקה גורפת – זהירות!
   const deleteAll = async () => {
     const c1 = prompt('מחיקה גורפת של *כל* המשלוחים. כדי לאשר כתוב/י: מחיקה')
     if ((c1||'').trim() !== 'מחיקה') return
@@ -268,7 +262,6 @@ export default function Admin() {
     await updateDoc(ref, { [key]: v, updatedAt: serverTimestamp() })
   }
 
-  // הוספת שכונה ידנית
   async function addNeighborhood(){
     const name = prompt('שם שכונה:')
     if (!name) return
@@ -276,7 +269,6 @@ export default function Admin() {
     await setDoc(doc(db,'neighborhoods',id), { name: name.trim(), active:true, order:0 }, { merge:true })
   }
 
-  // סנכרון שכונות ממשלוחים
   async function syncNeighborhoodsFromDeliveries(){
     const snap = await getDocs(collection(db,'deliveries'))
     const setN = new Set()
@@ -293,7 +285,16 @@ export default function Admin() {
     alert(`הסתנכרן! נמצאו ${setN.size} שכונות, עודכנו/נוצרו ${created}.`)
   }
 
-  /* ---------- סינון/סיכומים ---------- */
+  // *** חדש: שחרור שיבוץ מצד אדמין ***
+  async function releaseAssignmentAdmin(id) {
+    await updateDoc(doc(db, 'deliveries', id), {
+      status: 'pending',
+      assignedVolunteerId: null,
+      updatedAt: serverTimestamp()
+    })
+  }
+
+  /* ---- סינון/סיכומים ---- */
   const visible = rows.filter(r=>{
     if (filterStatus!=='all' && r.status!==filterStatus) return false
     if (filterNeighborhood!=='all'){
@@ -303,7 +304,6 @@ export default function Admin() {
     const text = `${r.recipientName} ${r.address?.street||''} ${r.phone||''}`.toLowerCase()
     return text.includes(qtext.trim().toLowerCase())
   })
-
   const counts = countByStatus(filterNeighborhood==='all' ? rows : rows.filter(r=>(r.address?.neighborhood||'')===filterNeighborhood))
 
   return (
@@ -445,7 +445,9 @@ export default function Admin() {
                     <button className="btn btn-xs join-item btn-success" onClick={()=>updateStatus(r.id,'delivered')}>נמסרה</button>
                     <button className="btn btn-xs join-item btn-error" onClick={()=>updateStatus(r.id,'returned')}>חזרה</button>
                   </div>
-                  {r.assignedVolunteerId && <button className="btn btn-xs" onClick={()=>updateStatus(r.id,'pending')}>שחרר</button>}
+                  {r.assignedVolunteerId && (
+                    <button className="btn btn-xs" onClick={()=>releaseAssignmentAdmin(r.id)}>שחרר</button>
+                  )}
                   <button className="btn btn-xs btn-outline btn-error" onClick={()=>deleteOne(r.id)}>מחק</button>
                 </td>
               </tr>
@@ -458,7 +460,7 @@ export default function Admin() {
   )
 }
 
-/* ----------------- עזרי UI ----------------- */
+/* ---- עזרי UI ---- */
 function Wrap({children}){ return <div dir="rtl" className="max-w-7xl mx-auto p-6">{children}</div> }
 function Badge({status}){
   const he = { pending:'ממתין', assigned:'הוקצה', in_transit:'בדרך', delivered:'נמסרה', returned:'חזרה למחסן' }
@@ -468,14 +470,11 @@ function Badge({status}){
 function CountBadge({label,value,color}){ return <div className={`badge ${color} gap-2 text-sm`}>{label}<span className="badge">{value||0}</span></div> }
 function countByStatus(list){ const out={pending:0,assigned:0,in_transit:0,delivered:0,returned:0}; for(const r of list){ if(out[r.status]!=null) out[r.status]++ } return out }
 
-/* תא לעריכה – dblclick → edit, blur/Enter → save */
 function EditableCell({ value:initial, onSave, textarea=false }){
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState(initial||'')
   useEffect(()=>{ setVal(initial||'') },[initial])
-
   const commit = async ()=>{ setEditing(false); const v=(val||'').trim(); if(v===(initial||'')) return; await onSave(v) }
-
   if(!editing){
     return <div onDoubleClick={()=>setEditing(true)} className="min-h-[32px] cursor-text">{initial ? <span>{initial}</span> : <span className="opacity-40">—</span>}</div>
   }

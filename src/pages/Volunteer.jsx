@@ -9,12 +9,12 @@ import {
 export default function Volunteer() {
   const nav = useNavigate()
 
-  // הגנה: רק משתמש רשום (לא אנונימי)
+  // רק משתמש רשום (לא אנונימי)
   const [user, setUser] = useState(auth.currentUser)
   useEffect(() => {
     const un = auth.onAuthStateChanged(u => {
       setUser(u)
-      if (!u || u.isAnonymous) nav('/') // אין גישה לא אנונימי
+      if (!u || u.isAnonymous) nav('/')
     })
     return () => un()
   }, [nav])
@@ -25,7 +25,7 @@ export default function Volunteer() {
   }, [user])
 
   // שכונות פעילות
-  const [neighborhoods, setNeighborhoods] = useState([]) // [{id,name,active}]
+  const [neighborhoods, setNeighborhoods] = useState([])
   useEffect(() => {
     const un = onSnapshot(collection(db,'neighborhoods'), snap => {
       const arr=[]
@@ -35,7 +35,7 @@ export default function Volunteer() {
     return () => un()
   }, [])
 
-  // ספירות "ממתין" לכל שכונה
+  // ממתינים לכל שכונה
   const [pendingCounts, setPendingCounts] = useState({})
   useEffect(() => {
     const qDel = query(collection(db, 'deliveries'), where('status','==','pending'))
@@ -53,12 +53,12 @@ export default function Volunteer() {
     return () => un()
   }, [])
 
-  // בחירת שכונה + “כמות משלוחים”
+  // בחירת שכונה + כמות
   const [selectedNeighborhood, setSelectedNeighborhood] = useState('')
   const [wantedCount, setWantedCount] = useState(1)
   const [msg, setMsg] = useState('')
 
-  // המשימות שלי (ללא orderBy כדי לא לדרוש אינדקס)
+  // המשימות שלי (ללא orderBy → מיון מקומי)
   const [my, setMy] = useState([])
   useEffect(() => {
     if (!user) return
@@ -66,7 +66,6 @@ export default function Volunteer() {
     const un = onSnapshot(qMine, snap => {
       const arr=[]
       snap.forEach(d => arr.push({id:d.id, ...d.data()}))
-      // מיון מקומי (חדש -> ישן)
       arr.sort((a,b)=>{
         const ta = (a.updatedAt?.seconds||a.createdAt?.seconds||0)
         const tb = (b.updatedAt?.seconds||b.createdAt?.seconds||0)
@@ -83,7 +82,6 @@ export default function Volunteer() {
     const want = Math.max(1, Number(wantedCount||1))
     setMsg('מנסה לשבץ…')
 
-    // מביא pending בשכונה (ונסנן מי שכבר הוקצה)
     const qP = query(
       collection(db,'deliveries'),
       where('status','==','pending'),
@@ -120,7 +118,7 @@ export default function Volunteer() {
     await updateDoc(doc(db,'deliveries', id), { status, updatedAt: serverTimestamp() })
   }
 
-  // *** חדש: שחרור שיבוץ (החזרה ל"ממתין" וניקוי assignedVolunteerId) ***
+  // שחרור שיבוץ – כמו אצל אדמין (לעצמו בלבד לפי החוקים)
   async function releaseAssignment(id) {
     if (!confirm('לשחרר את המשלוח הזה מהשיבוץ שלך?')) return
     await updateDoc(doc(db,'deliveries', id), {
@@ -134,13 +132,12 @@ export default function Volunteer() {
 
   return (
     <div dir="rtl" className="max-w-6xl mx-auto p-6">
-      {/* כותרת וברכה */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold">שלום {displayName} 👋</h2>
         <a className="btn btn-ghost" href="/">דף הבית</a>
       </div>
 
-      {/* בחירת שכונה + כמות משלוחים */}
+      {/* שיבוץ לפי שכונה */}
       <div className="mb-6 p-4 rounded-xl border bg-base-100">
         <div className="font-semibold mb-2">שיבוץ לפי שכונה</div>
 
@@ -171,7 +168,7 @@ export default function Volunteer() {
         {msg && <div className="alert mt-3"><span>{msg}</span></div>}
       </div>
 
-      {/* טבלה – קריאה בלבד, שינוי סטטוס + שחרור */}
+      {/* הטבלה – ללא עריכה, שינוי סטטוס + שחרור */}
       <div className="p-4 rounded-xl border bg-base-100">
         <div className="font-semibold mb-2">המשלוחים ששובצו לך</div>
         {my.length === 0 ? (
