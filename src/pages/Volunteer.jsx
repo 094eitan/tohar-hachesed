@@ -1,46 +1,27 @@
-// web/src/pages/Volunteer.jsx
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth, db, serverTimestamp } from '../lib/firebase'
 import {
-  collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, updateDoc, where, addDoc
+  collection, doc, getDocs, onSnapshot, orderBy, query, updateDoc, where
 } from 'firebase/firestore'
 
 export default function Volunteer() {
   const nav = useNavigate()
 
-  // הגנה: לא מחוברים → לוגין
+  // הגנה: רק משתמש רשום (לא אנונימי)
   const [user, setUser] = useState(auth.currentUser)
   useEffect(() => {
     const un = auth.onAuthStateChanged(u => {
       setUser(u)
-      if (!u) nav('/login') // אין גישה לא-מחובר
+      if (!u || u.isAnonymous) nav('/') // אין גישה לא אנונימי
     })
     return () => un()
   }, [nav])
 
-  // ברכה: שם משתמש
   const displayName = useMemo(() => {
     if (!user) return ''
     return user.displayName || (user.email ? user.email.split('@')[0] : 'מתנדב')
   }, [user])
-
-  // אירועים פעילים (בשלב הזה מספיק אירוע אחד “חלוקה לראש השנה”)
-  const [events, setEvents] = useState([])          // [{id, name, active}]
-  const [selectedEventId, setSelectedEventId] = useState('')
-  useEffect(() => {
-    const qEv = query(collection(db,'events'), where('active','==',true), orderBy('name'))
-    const un = onSnapshot(qEv, snap => {
-      const arr=[]
-      snap.forEach(d=>arr.push({id:d.id, ...d.data()}))
-      setEvents(arr)
-      if (!selectedEventId && arr.length) setSelectedEventId(arr[0].id)
-    })
-    return () => un()
-  }, [selectedEventId])
-
-  const selectedEvent = events.find(e=>e.id===selectedEventId) || null
-  const eventName = selectedEvent?.name || '' // נשתמש לשיוך בקמפיין (campaign)
 
   // שכונות פעילות
   const [neighborhoods, setNeighborhoods] = useState([]) // [{id,name,active}]
@@ -54,48 +35,37 @@ export default function Volunteer() {
     return () => un()
   }, [])
 
-  // ספירות "ממתין" לכל שכונה (מסונן לאירוע אם יש campaign תואם, או בלי קמפיין)
-  const [pendingCounts, setPendingCounts] = useState({}) // { 'אבני חן': 12, ...}
+  // ספירות "ממתין" לכל שכונה
+  const [pendingCounts, setPendingCounts] = useState({})
   useEffect(() => {
-    // מביאים את כל ה-pending (נחסוך אינדקסים, נסנן קליינט)
     const qDel = query(collection(db, 'deliveries'), where('status','==','pending'))
     const un = onSnapshot(qDel, snap => {
-      const all=[]
-      snap.forEach(d => all.push({ id:d.id, ...d.data() }))
-
-      const counts = {}
-      for (const r of all) {
-        // מסנן כתובת + שכונה + לא מוקצה
+      const counts={}
+      snap.forEach(d=>{
+        const r = {id:d.id, ...d.data()}
         const nb = r.address?.neighborhood || ''
-        if (!nb) continue
-        if (r.assignedVolunteerId) continue
-
-        // אם נבחר אירוע: מציג רק כאלה עם campaign תואם או ריק
-        if (eventName) {
-          const c = r.campaign || ''
-          if (c && c !== eventName) continue
-        }
-
-        counts[nb] = (counts[nb] || 0) + 1
-      }
+        if (!nb) return
+        if (r.assignedVolunteerId) return
+        counts[nb] = (counts[nb]||0)+1
+      })
       setPendingCounts(counts)
     })
     return () => un()
-  }, [eventName])
+  }, [])
 
-  // בחירת שכונה וכמות
+  // בחירת שכונה + “כמות משלוחים”
   const [selectedNeighborhood, setSelectedNeighborhood] = useState('')
   const [wantedCount, setWantedCount] = useState(1)
   const [msg, setMsg] = useState('')
 
-  // משימות שלי
-  const [my, setMy] = useState([]) // רשימת השיבוצים שלי
+  // המשימות שלי
+  const [my, setMy] = useState([])
   useEffect(() => {
     if (!user) return
     const qMine = query(collection(db,'deliveries'), where('assignedVolunteerId','==', user.uid), orderBy('updatedAt','desc'))
     const un = onSnapshot(qMine, snap => {
       const arr=[]
-      snap.forEach(d => arr.push({id:d.id, ...d.data()}))
+      snap.forEach(d=>arr.push({id:d.id, ...d.data()}))
       setMy(arr)
     })
     return () => {}
@@ -105,29 +75,24 @@ export default function Volunteer() {
     if (!user) return
     if (!selectedNeighborhood) { setMsg('בחר שכונה'); return }
     const want = Math.max(1, Number(wantedCount||1))
-
     setMsg('מנסה לשבץ…')
 
-    // מביאים רשימת pending בשכונה, נסנן ידנית שלא מוקצה ושהקמפיין מתאים
-    const qP = query(collection(db,'deliveries'),
+    // מביא pending בשכונה (ונסנן מי שכבר הוקצה)
+    const qP = query(
+      collection(db,'deliveries'),
       where('status','==','pending'),
       where('address.neighborhood','==', selectedNeighborhood)
     )
     const snap = await getDocs(qP)
     const pool=[]
-    snap.forEach(d => {
-      const r = { id:d.id, ...d.data() }
-      if (r.assignedVolunteerId) return // כבר הוקצה
-      if (eventName) {
-        const c = r.campaign || ''
-        if (c && c !== eventName) return
-      }
+    snap.forEach(d=>{
+      const r = {id:d.id, ...d.data()}
+      if (r.assignedVolunteerId) return
       pool.push(r)
     })
 
     if (!pool.length) { setMsg('אין משלוחים זמינים בשכונה הזו כרגע'); return }
 
-    // בוחרים עד X
     const chosen = pool.slice(0, want)
     let ok=0
     for (const r of chosen) {
@@ -135,12 +100,10 @@ export default function Volunteer() {
         await updateDoc(doc(db,'deliveries', r.id), {
           assignedVolunteerId: user.uid,
           status: 'assigned',
-          // אם לא היה campaign – נשייך לאירוע הנוכחי כדי "לסמן"
-          ...(eventName ? { campaign: (r.campaign || eventName) } : {}),
           updatedAt: serverTimestamp()
         })
         ok++
-      } catch (e) {
+      } catch(e) {
         console.error('assign fail', e)
       }
     }
@@ -148,9 +111,7 @@ export default function Volunteer() {
   }
 
   async function setStatus(id, status) {
-    await updateDoc(doc(db,'deliveries', id), {
-      status, updatedAt: serverTimestamp()
-    })
+    await updateDoc(doc(db,'deliveries', id), { status, updatedAt: serverTimestamp() })
   }
 
   async function releaseOne(id) {
@@ -161,34 +122,18 @@ export default function Volunteer() {
     })
   }
 
-  if (!user) return null
+  if (!user || user.isAnonymous) return null
 
   return (
     <div dir="rtl" className="max-w-5xl mx-auto p-6">
-      {/* כותרת וברכה */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold">שלום {displayName} 👋</h2>
+        <a className="btn btn-ghost" href="/">דף הבית</a>
       </div>
 
-      {/* בחירת אירוע */}
+      {/* בחירת שכונה + כמות משלוחים */}
       <div className="mb-4 p-4 rounded-xl border bg-base-100">
-        <div className="font-semibold mb-2">אירוע</div>
-        {events.length === 0 ? (
-          <div className="opacity-60 text-sm">אין אירועים פעילים כרגע</div>
-        ) : (
-          <select className="select select-bordered"
-                  value={selectedEventId}
-                  onChange={e=>setSelectedEventId(e.target.value)}>
-            {events.map(e=>(
-              <option key={e.id} value={e.id}>{e.name}</option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {/* בחירת שכונה + כמות */}
-      <div className="mb-4 p-4 rounded-xl border bg-base-100">
-        <div className="font-semibold mb-2">בחר שכונה וכמות משלוחים</div>
+        <div className="font-semibold mb-2">שיבוץ לפי שכונה</div>
 
         <div className="flex flex-wrap gap-3 items-end">
           <div>
@@ -205,8 +150,8 @@ export default function Volunteer() {
           </div>
 
           <div>
-            <label className="label"><span className="label-text">כמות</span></label>
-            <input type="number" min="1" className="input input-bordered w-32"
+            <label className="label"><span className="label-text">כמות משלוחים</span></label>
+            <input type="number" min="1" className="input input-bordered w-40"
                    value={wantedCount}
                    onChange={e=>setWantedCount(e.target.value)} />
           </div>
@@ -217,7 +162,7 @@ export default function Volunteer() {
         {msg && <div className="alert mt-3"><span>{msg}</span></div>}
       </div>
 
-      {/* רשימת המשימות שלי */}
+      {/* המשימות שלי */}
       <div className="p-4 rounded-xl border bg-base-100">
         <div className="font-semibold mb-2">המשלוחים שלי</div>
         {my.length === 0 ? (
@@ -247,11 +192,7 @@ export default function Volunteer() {
                       {d.address?.apartment ? ` — ${d.address.apartment}` : ''}
                       {d.address?.doorCode ? ` (קוד: ${d.address.doorCode})` : ''}
                     </td>
-                    <td>
-                      {d.phone
-                        ? <a className="link" href={`tel:${d.phone}`}>{d.phone}</a>
-                        : '—'}
-                    </td>
+                    <td>{d.phone ? <a className="link" href={`tel:${d.phone}`}>{d.phone}</a> : '—'}</td>
                     <td><Badge status={d.status} /></td>
                     <td className="flex gap-1">
                       <div className="join">
@@ -260,12 +201,6 @@ export default function Volunteer() {
                         <button className="btn btn-xs join-item btn-error" onClick={()=>setStatus(d.id,'returned')}>חזרה</button>
                       </div>
                       <button className="btn btn-xs" onClick={()=>releaseOne(d.id)}>שחרר</button>
-                      {d.address?.street && (
-                        <button
-                          className="btn btn-xs btn-outline"
-                          onClick={()=>copyText(`${d.recipientName}, ${d.address?.street}, ${d.address?.city}${d.address?.apartment?` — ${d.address?.apartment}`:''}`)}
-                        >העתק כתובת</button>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -288,8 +223,4 @@ function Badge({ status }) {
     returned:'badge-error'
   }[status] || 'badge-ghost'
   return <span className={`badge ${color}`}>{he[status] || status}</span>
-}
-
-async function copyText(t) {
-  try { await navigator.clipboard.writeText(t) } catch {}
 }

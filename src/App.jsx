@@ -1,70 +1,61 @@
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom'
-import { auth, db } from './lib/firebase'
-import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
-import Landing from './pages/Landing.jsx'      // 👈 דף הבית/כניסה/מידע
-import Volunteer from './pages/Volunteer.jsx'
-import Admin from './pages/Admin.jsx'
+import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom'
+import Login from './pages/Login'
+import Volunteer from './pages/Volunteer'
+import Admin from './pages/Admin'
+import { auth } from './lib/firebase'
 
-export default function App() {
-  const [user, setUser] = useState(undefined) // undefined=טוען, null=לא מחובר
-  const [isAdmin, setIsAdmin] = useState(false)
+function NavBar() {
+  const [user, setUser] = useState(auth.currentUser)
+  const nav = useNavigate()
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) { setUser(null); setIsAdmin(false); return }
-      setUser(u)
-      // בדיקת אדמין
-      const snap = await getDoc(doc(db, 'admins', u.uid))
-      setIsAdmin(snap.exists())
-    })
-    return () => unsub()
+    const un = auth.onAuthStateChanged(setUser)
+    return () => un()
   }, [])
 
-  if (user === undefined) return <div dir="rtl" className="p-6">טוען…</div>
+  async function doLogout() {
+    const { signOut } = await import('firebase/auth')
+    await signOut(auth)
+    nav('/') // <<< חשוב: חוזר לדף הבית (שם ה-Login)
+  }
 
-  return (
-    <BrowserRouter>
-      <TopBar user={user} />
-
-      <Routes>
-        {/* דף הבית הוא גם דף הכניסה/הרשמה + מידע */}
-        <Route path="/" element={ user ? <Navigate to={isAdmin ? '/admin' : '/volunteer'} replace /> : <Landing /> } />
-        <Route path="/volunteer" element={<Protected user={user}><Volunteer/></Protected>} />
-        <Route path="/admin" element={<Protected user={user}><Admin/></Protected>} />
-        <Route path="*" element={<NotFound/>} />
-      </Routes>
-    </BrowserRouter>
-  )
-}
-
-function TopBar({ user }) {
   return (
     <nav className="navbar bg-base-100 border-b">
       <div className="flex-1">
-        <Link to="/" className="btn btn-ghost text-xl">טוהר החסד</Link>
+        <Link className="btn btn-ghost text-xl" to="/">טוהר החסד</Link>
       </div>
       <div className="flex gap-2">
-        {!user ? (
-          // לא מחובר – אין קישורים מיותרים
-          <></>
-        ) : (
-          <>
-            <Link className="btn btn-ghost" to="/volunteer">דף המתנדב</Link>
-            <button className="btn btn-outline" onClick={()=>signOut(auth)}>התנתק</button>
-          </>
+        <Link className="btn btn-ghost" to="/">כניסה</Link>
+        <Link className="btn btn-ghost" to="/volunteer">מתנדב</Link>
+        <Link className="btn btn-ghost" to="/admin">אדמין</Link>
+        {user && (
+          <button className="btn btn-outline" onClick={doLogout}>
+            התנתק
+          </button>
         )}
       </div>
     </nav>
   )
 }
 
-function Protected({ user, children }) {
-  if (!user) return <Navigate to="/" replace />
-  return children
-}
-
-function NotFound() {
-  return <div dir="rtl" className="p-6">עמוד לא נמצא</div>
+export default function App() {
+  return (
+    <BrowserRouter>
+      <NavBar />
+      <Routes>
+        {/* דף הבית הוא דף הכניסה */}
+        <Route path="/" element={<Login />} />
+        <Route path="/volunteer" element={<Volunteer />} />
+        <Route path="/admin" element={<Admin />} />
+        {/* 404 */}
+        <Route path="*" element={
+          <div dir="rtl" className="p-10 text-center">
+            <h2 className="text-2xl">הדף לא נמצא</h2>
+            <Link className="btn mt-4" to="/">חזרה לדף הבית</Link>
+          </div>
+        }/>
+      </Routes>
+    </BrowserRouter>
+  )
 }
