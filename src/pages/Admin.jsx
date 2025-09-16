@@ -186,7 +186,7 @@ export default function Admin() {
           const apt = pick(r, synonyms.apartment)
           const ent = pick(r, synonyms.entrance)
           const flr = pick(r, synonyms.floor)
-          const aptParts = []; if(apt) aptParts.push(apt); if(ent) aptParts.push(`כניסה ${ent}`); if(flr) aptParts.push(`קומה ${flר}`)
+          const aptParts = []; if(apt) aptParts.push(apt); if(ent) aptParts.push(`כניסה ${ent}`); if(flr) aptParts.push(`קומה ${flr}`)
           const apartment = aptParts.join(' ').trim() || ''
           const phone         = pick(r, synonyms.phone)
           const packageCount  = coerceNumber(pick(r, synonyms.packageCount), 1)
