@@ -152,8 +152,8 @@ export default function Volunteer() {
 
   // סיום משימה אחרי "נמסרה" (נשאר Delivered אבל נעלם מהרשימה)
 	async function completeAfterDelivered(id) {
-	  const ok = confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר נמסרה)')
-	  if (!ok) return
+	  const ok = confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')
+	  if (!ok) return 
 	  const ref = doc(db,'deliveries', id)
 	  await updateDoc(ref, { volunteerCompletedAt: serverTimestamp() })
 	}
