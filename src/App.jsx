@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom'
 import Login from './pages/Login'
-import Volunteer from './pages/Volunteer'
 import Admin from './pages/Admin'
+import AdminVolunteers from './pages/AdminVolunteers'
+import Volunteer from './pages/Volunteer'
+import VolunteerStats from './pages/VolunteerStats'
 import { auth } from './lib/firebase'
 
 function NavBar() {
@@ -46,8 +48,10 @@ export default function App() {
       <Routes>
         {/* דף הבית הוא דף הכניסה */}
         <Route path="/" element={<Login />} />
-        <Route path="/volunteer" element={<Volunteer />} />
-        <Route path="/admin" element={<Admin />} />
+        <Route path="/admin" element={<Admin/>} />
+		<Route path="/admin/volunteers" element={<AdminVolunteers/>} />
+		<Route path="/volunteer" element={<Volunteer/>} />
+		<Route path="/volunteer/stats" element={<VolunteerStats/>} />
         {/* 404 */}
         <Route path="*" element={
           <div dir="rtl" className="p-10 text-center">

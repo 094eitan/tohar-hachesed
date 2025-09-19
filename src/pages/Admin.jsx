@@ -6,6 +6,7 @@ import {
   query, orderBy, getDoc, setDoc, getDocs, limit
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
+import { useNavigate } from 'react-router-dom' // ← חדש: לנווט לעמוד ניהול מתנדבים
 
 /* ---------- הרשאת אדמין ---------- */
 async function isAdmin() {
@@ -63,6 +64,22 @@ export default function Admin() {
   const [msg, setMsg] = useState('')
   const [importErrors, setImportErrors] = useState([])
   const fileRef = useRef(null)
+  const nav = useNavigate() // ← חדש
+
+  // ← חדש: volunteersMap כדי להציג שם מתנדב בעמודה
+  const [volunteersMap, setVolunteersMap] = useState({})
+  useEffect(() => {
+    if (!allowed) return
+    const un = onSnapshot(collection(db,'volunteers'), snap=>{
+      const m={}
+      snap.forEach(d=>{
+        const v = d.data() || {}
+        m[d.id] = v.displayName || (v.email ? String(v.email).split('@')[0] : d.id.slice(0,6))
+      })
+      setVolunteersMap(m)
+    })
+    return ()=>un()
+  }, [allowed])
 
   useEffect(() => {
     let unsubDeliveries = () => {}, unsubNeighborhoods = () => {}
@@ -130,7 +147,7 @@ export default function Admin() {
     const address = { street, city }
     if (neighborhood) address.neighborhood = neighborhood
     if (apartment) address.apartment = apartment
-    if (doorCode) address.doorCode = doorCode 
+    if (doorCode) address.doorCode = doorCode
 
     const ref = await addDoc(collection(db,'deliveries'), {
       recipientName, address, phone,
@@ -340,9 +357,19 @@ export default function Admin() {
   })
   const counts = countByStatus(filterNeighborhood==='all' ? rows : rows.filter(r=>(r.address?.neighborhood||'')===filterNeighborhood))
 
+  // פונקציה קטנה להחזרת שם מתנדב
+  function volunteerLabel(uid){
+    if (!uid) return '—'
+    return volunteersMap[uid] || (uid.length>6 ? uid.slice(0,6)+'…' : uid)
+  }
+
   return (
     <Wrap>
-      <h2 className="text-xl font-semibold mb-3">אדמין — ניהול משלוחים</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xl font-semibold">אדמין — ניהול משלוחים</h2>
+        {/* ← חדש: קיצור לעמוד ניהול מתנדבים */}
+        <button className="btn btn-outline" onClick={()=>nav('/admin/volunteers')}>ניהול מתנדבים</button>
+      </div>
 
       {/* ספירות */}
       <div className="flex flex-wrap gap-2 mb-3">
@@ -471,7 +498,12 @@ export default function Admin() {
                   <EditableCell value={String(r.packageCount??'')} onSave={v=>updateTopField(r.id,'packageCount',v,'number')} />
                 </td>
                 <td className="whitespace-nowrap"><Badge status={r.status} /></td>
-                <td className="whitespace-nowrap">{r.assignedVolunteerId ? r.assignedVolunteerId.slice(0,6)+'…' : '—'}</td>
+
+                {/* ← חדש: מציג שם מתנדב במקום UID */}
+                <td className="whitespace-nowrap">
+                  {r.assignedVolunteerId ? volunteerLabel(r.assignedVolunteerId) : '—'}
+                </td>
+
                 <td className="flex flex-wrap gap-1">
                   <div className="join">
                     <button className="btn btn-xs join-item btn-warning" onClick={()=>updateStatus(r.id,'pending')}>ממתין</button>
