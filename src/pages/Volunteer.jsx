@@ -19,7 +19,7 @@ export default function Volunteer() {
         nav('/')
         return
       }
-      // ← חדש: רישום מתנדב + heartbeat
+      // רישום מתנדב + heartbeat ראשוני
       await setDoc(doc(db,'volunteers', u.uid), {
         displayName: u.displayName || (u.email ? u.email.split('@')[0] : 'מתנדב'),
         email: u.email || null,
@@ -29,7 +29,7 @@ export default function Volunteer() {
     return () => un()
   }, [nav])
 
-  // ← חדש: heartbeat כל דקה
+  // heartbeat כל דקה
   useEffect(()=>{
     if (!user || user.isAnonymous) return
     const iv = setInterval(()=>{
@@ -88,7 +88,7 @@ export default function Volunteer() {
         const tb = (b.updatedAt?.seconds||b.createdAt?.seconds||0)
         return tb-ta
       })
-      // ← חדש: מסתיר פריטים שסומנו "סיים משימה" אחרי נמסרה
+      // מסתיר פריטים שסומנו "סיים משימה" אחרי נמסרה
       const visible = arr.filter(x => !(x.status==='delivered' && x.volunteerCompletedAt))
       setMy(visible)
     })
@@ -134,7 +134,7 @@ export default function Volunteer() {
     await updateDoc(doc(db,'deliveries', id), { status, updatedAt: serverTimestamp() })
   }
 
-  // שחרור שיבוץ (לעצמו) + יצירת אינדקס כדי שהספירה תעלה מייד
+  // שחרור שיבוץ (לעצמו) + יצירת אינדקס כדי שהספירה תעלה מיד
   async function releaseAssignment(id) {
     if (!confirm('לשחרר את המשלוח הזה מהשיבוץ שלך?')) return
     await updateDoc(doc(db,'deliveries', id), {
@@ -150,7 +150,7 @@ export default function Volunteer() {
     }, { merge: true })
   }
 
-  // ← חדש: סיום משימה אחרי "נמסרה" (נשאר Delivered אבל נעלם מהרשימה)
+  // סיום משימה אחרי "נמסרה" (נשאר Delivered אבל נעלם מהרשימה)
   async function completeAfterDelivered(id) {
     const ref = doc(db,'deliveries', id)
     await updateDoc(ref, { volunteerCompletedAt: serverTimestamp() })
@@ -163,9 +163,26 @@ export default function Volunteer() {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold">שלום {displayName} 👋</h2>
         <div className="flex gap-2">
-          {/* ← חדש: קישור לעמוד הסטטיסטיקות של המתנדב */}
           <button className="btn btn-ghost" onClick={()=>nav('/volunteer/stats')}>סיכומים ויעדים</button>
           <a className="btn btn-ghost" href="/">דף הבית</a>
+        </div>
+      </div>
+
+      {/* כרטיס: איך זה עובד */}
+      <div className="mb-6 p-4 rounded-xl border bg-base-100">
+        <div className="font-semibold mb-2">איך זה עובד?</div>
+        <ol className="list-decimal pr-5 space-y-1 text-sm">
+          <li>בחר/י <b>שכונה</b> מהרשימה (רואים כמה ממתינים בכל שכונה).</li>
+          <li>בחר/י <b>כמה משלוחים</b> לקבל עכשיו.</li>
+          <li>לחץ/י <b>📦 קבל שיבוץ</b> – המערכת תשבץ משלוחים זמינים עבורך.</li>
+          <li>בכל משלוח: עדכן/ני ל־<em>בדרך</em> / <em>נמסרה</em> / <em>חזרה</em>, או <b>שחרר</b>.</li>
+        </ol>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <span className="badge badge-warning">ממתין</span>
+          <span className="badge badge-info">הוקצה</span>
+          <span className="badge badge-accent">בדרך</span>
+          <span className="badge badge-success">נמסרה</span>
+          <span className="badge badge-error">חזרה למחסן</span>
         </div>
       </div>
 
@@ -200,7 +217,7 @@ export default function Volunteer() {
         {msg && <div className="alert mt-3"><span>{msg}</span></div>}
       </div>
 
-      {/* הטבלה – ללא עריכה, שינוי סטטוס + שחרור + סיים משימה */}
+      {/* הטבלה – שינוי סטטוס + שחרור + סיים משימה */}
       <div className="p-4 rounded-xl border bg-base-100">
         <div className="font-semibold mb-2">המשלוחים ששובצו לך</div>
         {my.length === 0 ? (
@@ -245,7 +262,7 @@ export default function Volunteer() {
 
                       <button className="btn btn-xs" onClick={()=>releaseAssignment(d.id)}>שחרר</button>
 
-                      {/* ← חדש: סיום משימה רק אם נמסרה */}
+                      {/* סיום משימה רק אם נמסרה */}
                       {d.status === 'delivered' && (
                         <button className="btn btn-xs btn-outline" onClick={()=>completeAfterDelivered(d.id)}>
                           סיים משימה
@@ -256,7 +273,9 @@ export default function Volunteer() {
                 ))}
               </tbody>
             </table>
-            <div className="mt-3 text-sm opacity-80">סה״כ שובצו לך: <b>{my.length}</b> משלוחים (מסתיר משלוחים שסומנו "סיים משימה").</div>
+            <div className="mt-3 text-sm opacity-80">
+              סה״כ שובצו לך: <b>{my.length}</b> משלוחים (מסתיר משלוחים שסומנו "סיים משימה").
+            </div>
           </div>
         )}
       </div>
