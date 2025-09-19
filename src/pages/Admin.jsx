@@ -130,7 +130,7 @@ export default function Admin() {
     const address = { street, city }
     if (neighborhood) address.neighborhood = neighborhood
     if (apartment) address.apartment = apartment
-    if (doorCode) address.doorCode = doorCode
+    if (doorCode) address.doorCode = doorCode 
 
     const ref = await addDoc(collection(db,'deliveries'), {
       recipientName, address, phone,
