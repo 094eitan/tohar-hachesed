@@ -18,33 +18,49 @@ async function isAdmin() {
 
 export default function AdminVolunteers() {
   const nav = useNavigate()
-  const [allowed, setAllowed] = useState(false)
+  const [allowed, setAllowed] = useState(null) // null = טוען, true/false = תוצאה
+  const [errMsg, setErrMsg] = useState('')
 
   useEffect(()=>{
     (async()=>{
-      const ok = await isAdmin()
-      setAllowed(ok)
+      try{
+        const ok = await isAdmin()
+        setAllowed(ok)
+      }catch(e){
+        setAllowed(false)
+        setErrMsg('שגיאה בבדיקת הרשאות: ' + (e?.message||e))
+      }
     })()
   },[])
+
   if (!auth.currentUser) return <Wrap><h3>יש להתחבר תחילה</h3></Wrap>
-  if (!allowed) return <Wrap><h3>אין הרשאת אדמין</h3></Wrap>
+  if (allowed === null) return <Wrap><div className="opacity-60">טוען…</div></Wrap>
+  if (!allowed) return <Wrap><h3>אין הרשאת אדמין</h3>{errMsg && <div className="alert mt-3"><span>{errMsg}</span></div>}</Wrap>
 
   // מתנדבים (אוסף volunteers – נוצר ע"י צד מתנדב)
   const [vols, setVols] = useState([])
   useEffect(()=>{
-    const un = onSnapshot(collection(db,'volunteers'), snap=>{
-      const arr=[]
-      snap.forEach(d=>arr.push({id:d.id, ...d.data()}))
-      setVols(arr)
-    })
+    if (!allowed) return
+    const un = onSnapshot(
+      collection(db,'volunteers'),
+      snap=>{
+        const arr=[]
+        snap.forEach(d=>arr.push({id:d.id, ...d.data()}))
+        setVols(arr)
+        setErrMsg('')
+      },
+      err=>{
+        console.error('volunteers snapshot error', err)
+        setErrMsg('אין הרשאה לקרוא volunteers או תקלה זמנית')
+      }
+    )
     return ()=>un()
-  },[])
+  },[allowed])
 
   // חישוב "מחובר עכשיו" לפי lastSeen בתוך 2 דקות
-  const now = Date.now()
   function isOnline(v){
     const t = v?.lastSeen?.seconds ? v.lastSeen.seconds*1000 : (v?.lastSeen || 0)
-    return now - t < 2*60*1000
+    return Date.now() - t < 2*60*1000
   }
 
   // סטטיסטיקות – נסיק counters מהשרת (ללא הורדת כל הרשומות)
@@ -53,7 +69,7 @@ export default function AdminVolunteers() {
     async function loadCounts(){
       const next = {}
       for (const v of vols){
-        const qAssigned = query(collection(db,'deliveries'), where('assignedVolunteerId','==', v.id))
+        const qAssigned  = query(collection(db,'deliveries'), where('assignedVolunteerId','==', v.id))
         const qDelivered = query(collection(db,'deliveries'), where('assignedVolunteerId','==', v.id), where('status','==','delivered'))
         const [c1, c2] = await Promise.all([
           getCountFromServer(qAssigned),
@@ -83,7 +99,7 @@ export default function AdminVolunteers() {
         status: 'assigned',
         updatedAt: serverTimestamp()
       })
-      // מחיקת pending_index אם קיים
+      // מחיקת pending_index אם קיים (עובד עם הכללים החדשים)
       await deleteDoc(doc(db,'pending_index', deliveryId.trim())).catch(()=>{})
       setMsg('המשלוח הוקצה בהצלחה')
       setDeliveryId('')
@@ -107,7 +123,7 @@ export default function AdminVolunteers() {
         <div className="flex flex-wrap gap-2 items-end">
           <select className="select select-bordered min-w-56" value={pickVolunteer} onChange={e=>setPickVolunteer(e.target.value)}>
             <option value="">בחר/י מתנדב…</option>
-            {vols.sort((a,b)=>(a.displayName||'').localeCompare(b.displayName||'', 'he')).map(v=>(
+            {vols.slice().sort((a,b)=>(a.displayName||'').localeCompare(b.displayName||'', 'he')).map(v=>(
               <option key={v.id} value={v.id}>
                 {v.displayName || (v.email ? v.email.split('@')[0] : v.id.slice(0,6))}
               </option>
@@ -118,12 +134,15 @@ export default function AdminVolunteers() {
           <button className="btn btn-primary" onClick={assignManually}>הקצה</button>
         </div>
         {msg && <div className="alert mt-3"><span>{msg}</span></div>}
-        <div className="text-xs opacity-70 mt-2">טיפ: את ה־ID של המשלוח אפשר להעתיק מרשימת המשלוחים (עמודת פעולות/קונסול).</div>
+        <div className="text-xs opacity-70 mt-2">טיפ: את ה־ID של המשלוח אפשר להעתיק מעמוד המשלוחים (או מהקונסול).</div>
       </div>
 
       {/* טבלת מתנדבים */}
       <div className="p-4 rounded-xl border bg-base-100">
         <div className="font-semibold mb-3">מתנדבים</div>
+
+        {errMsg && <div className="alert alert-error mb-3"><span>{errMsg}</span></div>}
+
         {vols.length===0 ? (
           <div className="opacity-60 text-sm">אין מתנדבים עדיין</div>
         ) : (
