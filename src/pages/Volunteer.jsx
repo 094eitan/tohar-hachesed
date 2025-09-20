@@ -3,8 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth, db, serverTimestamp } from '../lib/firebase'
 import {
-  collection, doc, getDocs, onSnapshot, query,
-  updateDoc, where, deleteDoc, limit, setDoc
+  collection, doc, getDocs, onSnapshot, query, updateDoc, where, deleteDoc, limit, setDoc
 } from 'firebase/firestore'
 
 export default function Volunteer() {
@@ -15,11 +14,8 @@ export default function Volunteer() {
   useEffect(() => {
     const un = auth.onAuthStateChanged(async u => {
       setUser(u)
-      if (!u || u.isAnonymous) {
-        nav('/')
-        return
-      }
-      // רישום/עדכון פרופיל מתנדב + heartbeat ראשוני
+      if (!u || u.isAnonymous) { nav('/'); return }
+      // רישום/עדכון פרופיל + heartbeat ראשוני
       await setDoc(doc(db,'volunteers', u.uid), {
         displayName: u.displayName || (u.email ? u.email.split('@')[0] : 'מתנדב'),
         email: u.email || null,
@@ -29,7 +25,7 @@ export default function Volunteer() {
     return () => un()
   }, [nav])
 
-  // heartbeat כל דקה (מחובר עכשיו לאדמין)
+  // heartbeat כל דקה
   useEffect(()=>{
     if (!user || user.isAnonymous) return
     const iv = setInterval(()=>{
@@ -38,51 +34,33 @@ export default function Volunteer() {
     return ()=>clearInterval(iv)
   }, [user])
 
-  const displayName = useMemo(() => {
-    if (!user) return ''
-    return user.displayName || (user.email ? user.email.split('@')[0] : 'מתנדב')
-  }, [user])
+  const displayName = useMemo(() => user ? (user.displayName || (user.email ? user.email.split('@')[0] : 'מתנדב')) : '', [user])
 
   // שכונות פעילות
   const [neighborhoods, setNeighborhoods] = useState([])
   useEffect(() => {
-    const un = onSnapshot(
-      collection(db,'neighborhoods'),
-      snap => {
-        const arr=[]
-        snap.forEach(d=>arr.push({id:d.id, ...d.data()}))
-        setNeighborhoods(arr.filter(n=>n.active).sort((a,b)=>a.name.localeCompare(b.name,'he')))
-      },
-      err => console.error('neighborhoods snapshot error', err)
-    )
+    const un = onSnapshot(collection(db,'neighborhoods'), snap => {
+      const arr=[]; snap.forEach(d=>arr.push({id:d.id, ...d.data()}))
+      setNeighborhoods(arr.filter(n=>n.active).sort((a,b)=>a.name.localeCompare(b.name,'he')))
+    })
     return () => un()
   }, [])
 
-  // ספירת ממתינים (pending_index)
+  // מונים של ממתינים (pending_index)
   const [pendingCounts, setPendingCounts] = useState({})
   useEffect(() => {
-    const un = onSnapshot(
-      collection(db,'pending_index'),
-      snap => {
-        const counts={}
-        snap.forEach(d=>{
-          const nb = d.data()?.neighborhood || ''
-          if (!nb) return
-          counts[nb] = (counts[nb]||0)+1
-        })
-        setPendingCounts(counts)
-      },
-      err => console.error('pending_index snapshot error', err)
-    )
-    return () => un()
+    const un = onSnapshot(collection(db,'pending_index'), snap => {
+      const counts={}; snap.forEach(d=>{ const nb=d.data()?.neighborhood||''; if (!nb) return; counts[nb]=(counts[nb]||0)+1 })
+      setPendingCounts(counts)
+    }); return () => un()
   }, [])
 
-  // בחירה לשיבוץ
+  // בחירת שכונה + כמות
   const [selectedNeighborhood, setSelectedNeighborhood] = useState('')
   const [wantedCount, setWantedCount] = useState(1)
   const [msg, setMsg] = useState('')
 
-  // המשלוחים שלי
+  // המשלוחים שלי – לא מסתירים Delivered, מסתירים רק אם יש volunteerCompletedAt
   const [my, setMy] = useState([])
   const [myErr, setMyErr] = useState('')
   useEffect(() => {
@@ -91,23 +69,12 @@ export default function Volunteer() {
     const un = onSnapshot(
       qMine,
       snap => {
-        const arr=[]
-        snap.forEach(d => arr.push({id:d.id, ...d.data()}))
-        // חדש: מיון אחרון מתעדכן למעלה
-        arr.sort((a,b)=>{
-          const ta = (a.updatedAt?.seconds||a.createdAt?.seconds||0)
-          const tb = (b.updatedAt?.seconds||b.createdAt?.seconds||0)
-          return tb-ta
-        })
-        // חשוב: לא מסתירים Delivered; מסתירים רק אם user סימן "סיים משימה"
+        const arr=[]; snap.forEach(d => arr.push({id:d.id, ...d.data()}))
+        arr.sort((a,b)=> (b.updatedAt?.seconds||b.createdAt?.seconds||0) - (a.updatedAt?.seconds||a.createdAt?.seconds||0))
         const visible = arr.filter(x => !(x.status==='delivered' && x.volunteerCompletedAt))
-        setMy(visible)
-        setMyErr('')
+        setMy(visible); setMyErr('')
       },
-      err => {
-        console.error('deliveries snapshot error', err)
-        setMyErr('אין הרשאה/נתונים להצגה. ודא שהמשלוחים שובצו אליך ושהחוקים מעודכנים.')
-      }
+      err => { console.error('deliveries snapshot error', err); setMyErr('אין הרשאה/נתונים להצגה') }
     )
     return () => un()
   }, [user])
@@ -119,19 +86,15 @@ export default function Volunteer() {
     const want = Math.max(1, Number(wantedCount||1))
     setMsg('מנסה לשבץ…')
 
-    const qIds = query(
-      collection(db,'pending_index'),
-      where('neighborhood', '==', selectedNeighborhood),
-      limit(want * 3)
-    )
+    const qIds = query(collection(db,'pending_index'), where('neighborhood','==',selectedNeighborhood), limit(want*3))
     const snap = await getDocs(qIds)
     if (snap.empty) { setMsg('אין משלוחים זמינים בשכונה הזו כרגע'); return }
 
-    let ok = 0
-    for (const docIdx of snap.docs) {
-      if (ok >= want) break
-      const id = docIdx.id
-      try {
+    let ok=0
+    for (const d of snap.docs){
+      if (ok>=want) break
+      const id=d.id
+      try{
         await updateDoc(doc(db,'deliveries', id), {
           assignedVolunteerId: user.uid,
           status: 'assigned',
@@ -139,57 +102,46 @@ export default function Volunteer() {
         })
         await deleteDoc(doc(db,'pending_index', id)).catch(()=>{})
         ok++
-      } catch (e) {
-        console.debug('claim failed for', id, e?.message)
-      }
+      }catch(e){ /* כנראה מישהו אחר תפס */ }
     }
     setMsg(ok ? `שובצו ${ok} משלוחים` : 'לא הצלחתי לשבץ, נסה שוב בעוד רגע')
   }
 
-  // שינוי סטטוס — לא משחרר; "ביטוח שיוך" כדי שלא ייעלם אחרי נמסרה
+  // שינוי סטטוס – משמרים את השיוך כדי ש-Delivered לא "ייעלם"
   async function setStatus(id, status) {
-    try {
+    try{
       await updateDoc(doc(db,'deliveries', id), {
         status,
         updatedAt: serverTimestamp(),
-        assignedVolunteerId: auth.currentUser?.uid || null
+        assignedVolunteerId: auth.currentUser?.uid || null   // <<< שומר את השיוך
       })
-    } catch (e) {
+    }catch(e){
       console.error('setStatus failed', e)
-      alert('שגיאה בעדכון סטטוס: ' + (e?.message || e))
+      alert('שגיאה בעדכון סטטוס: '+(e?.message||e))
     }
   }
 
-  // שחרור שיבוץ (לעצמו) + יצירת אינדקס מיידית
+  // שחרור שיבוץ (והחזרה ל-pending_index)
   async function releaseAssignment(id) {
     if (!confirm('לשחרר את המשלוח הזה מהשיבוץ שלך?')) return
-    const item = my.find(x=>x.id === id)
+    const item = my.find(x=>x.id===id)
     const nb = item?.address?.neighborhood || ''
-    try {
-      await updateDoc(doc(db,'deliveries', id), {
-        status: 'pending',
-        assignedVolunteerId: null,
-        updatedAt: serverTimestamp()
-      })
-      await setDoc(doc(db,'pending_index', id), {
-        neighborhood: nb,
-        createdAt: serverTimestamp()
-      }, { merge: true })
-    } catch (e) {
-      console.error('releaseAssignment failed', e)
-      alert('שגיאה בשחרור: ' + (e?.message || e))
+    try{
+      await updateDoc(doc(db,'deliveries', id), { status:'pending', assignedVolunteerId:null, updatedAt: serverTimestamp() })
+      await setDoc(doc(db,'pending_index', id), { neighborhood: nb, createdAt: serverTimestamp() }, { merge:true })
+    }catch(e){
+      console.error('releaseAssignment failed', e); alert('שגיאה בשחרור: '+(e?.message||e))
     }
   }
 
-  // סיום משימה אחרי "נמסרה" — נשאר Delivered אבל נעלם מהרשימה (שואל לפני)
+  // סיום משימה (אחרי "נמסרה") – נשאר Delivered אבל נעלם מהרשימה
   async function completeAfterDelivered(id) {
     const ok = confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')
     if (!ok) return
-    try {
+    try{
       await updateDoc(doc(db,'deliveries', id), { volunteerCompletedAt: serverTimestamp() })
-    } catch (e) {
-      console.error('completeAfterDelivered failed', e)
-      alert('שגיאה בסימון סיום משימה: ' + (e?.message || e))
+    }catch(e){
+      console.error('completeAfterDelivered failed', e); alert('שגיאה בסיום משימה: '+(e?.message||e))
     }
   }
 
@@ -205,15 +157,14 @@ export default function Volunteer() {
         </div>
       </div>
 
-      {/* איך זה עובד */}
+      {/* הסבר קצר */}
       <div className="mb-6 p-4 rounded-xl border bg-base-100">
         <div className="font-semibold mb-2">איך זה עובד?</div>
         <ol className="list-decimal pr-5 space-y-1 text-sm">
-          <li>בחר/י <b>שכונה</b> מהרשימה (רואים כמה ממתינים בכל שכונה).</li>
-          <li>בחר/י <b>כמה משלוחים</b> לקבל עכשיו.</li>
-          <li>לחץ/י <b>📦 קבל שיבוץ</b> – המערכת תשבץ משלוחים זמינים עבורך.</li>
-          <li>בכל משלוח: עדכן/י ל־<em>בדרך</em> / <em>נמסרה</em> / <em>חזרה</em>, או <b>שחרר</b>.</li>
-          <li>אחרי <b>נמסרה</b> יופיע <b>סיים משימה</b> שמעלים את השורה (המשלוח נשאר Delivered ברקע).</li>
+          <li>בחר/י <b>שכונה</b> וכמה משלוחים לקבל כעת.</li>
+          <li>לחץ/י <b>📦 קבל שיבוץ</b>.</li>
+          <li>עדכן/י סטטוס: <em>בדרך</em> / <em>נמסרה</em> / <em>חזרה</em>, או <b>שחרר</b>.</li>
+          <li>אחרי <b>נמסרה</b> יופיע <b>סיים משימה</b> שמעלים את השורה (המשלוח נשאר Delivered באדמין).</li>
         </ol>
       </div>
 
@@ -223,9 +174,7 @@ export default function Volunteer() {
         <div className="flex flex-wrap gap-3 items-end">
           <div>
             <label className="label"><span className="label-text">שכונה</span></label>
-            <select className="select select-bordered"
-                    value={selectedNeighborhood}
-                    onChange={e=>setSelectedNeighborhood(e.target.value)}>
+            <select className="select select-bordered" value={selectedNeighborhood} onChange={e=>setSelectedNeighborhood(e.target.value)}>
               <option value="">בחר…</option>
               {neighborhoods.map(n=>{
                 const c = pendingCounts[n.name] || 0
@@ -235,73 +184,55 @@ export default function Volunteer() {
           </div>
           <div>
             <label className="label"><span className="label-text">כמות משלוחים</span></label>
-            <input type="number" min="1" className="input input-bordered w-40"
-                   value={wantedCount}
-                   onChange={e=>setWantedCount(e.target.value)} />
+            <input type="number" min="1" className="input input-bordered w-40" value={wantedCount} onChange={e=>setWantedCount(e.target.value)} />
           </div>
           <button className="btn btn-primary" onClick={claimAssignments} disabled={!selectedNeighborhood}>📦 קבל שיבוץ</button>
         </div>
         {msg && <div className="alert mt-3"><span>{msg}</span></div>}
       </div>
 
-      {/* הטבלה */}
+      {/* הטבלה שלי */}
       <div className="p-4 rounded-xl border bg-base-100">
         <div className="font-semibold mb-2">המשלוחים ששובצו לך</div>
-
         {myErr && <div className="alert alert-error mb-3"><span>{myErr}</span></div>}
-
-        {my.length === 0 ? (
+        {my.length===0 ? (
           <div className="opacity-60 text-sm">לא שובצו לך משלוחים עדיין</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="table table-zebra w-full">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>שם</th>
-                  <th>שכונה</th>
-                  <th>כתובת</th>
-                  <th>טלפון</th>
-                  <th>חבילות</th>
-                  <th>הערות</th>
-                  <th>סטטוס</th>
-                  <th>פעולות</th>
+                  <th>#</th><th>שם</th><th>שכונה</th><th>כתובת</th><th>טלפון</th><th>חבילות</th><th>הערות</th><th>סטטוס</th><th>פעולות</th>
                 </tr>
               </thead>
               <tbody>
-                {my.map((d,idx)=>(
-                  <tr key={d.id}>
-                    <td>{idx+1}</td>
-                    <td><b>{d.recipientName}</b></td>
-                    <td>{d.address?.neighborhood || '—'}</td>
-                    <td>
-                      {d.address?.street}, {d.address?.city}
-                      {d.address?.apartment ? ` — ${d.address.apartment}` : ''}
-                      {d.address?.doorCode ? ` (קוד: ${d.address.doorCode})` : ''}
-                    </td>
-                    <td>{d.phone ? <a className="link" href={`tel:${d.phone}`}>{d.phone}</a> : '—'}</td>
-                    <td>{d.packageCount ?? 1}</td>
-                    <td className="max-w-[260px] truncate" title={d.notes || ''}>{d.notes || '—'}</td>
-                    <td><Badge status={d.status} /></td>
-                    <td className="flex flex-wrap gap-1">
-                      <div className="join">
-                        <button className="btn btn-xs join-item" onClick={()=>setStatus(d.id,'in_transit')}>בדרך</button>
-                        <button className="btn btn-xs join-item btn-success" onClick={()=>setStatus(d.id,'delivered')}>נמסרה</button>
-                        <button className="btn btn-xs join-item btn-error" onClick={()=>setStatus(d.id,'returned')}>חזרה</button>
-                      </div>
-                      <button className="btn btn-xs" onClick={()=>releaseAssignment(d.id)}>שחרר</button>
-                      {d.status === 'delivered' && (
-                        <button className="btn btn-xs btn-outline" onClick={()=>completeAfterDelivered(d.id)}>
-                          סיים משימה
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+              {my.map((d,idx)=>(
+                <tr key={d.id}>
+                  <td>{idx+1}</td>
+                  <td><b>{d.recipientName}</b></td>
+                  <td>{d.address?.neighborhood || '—'}</td>
+                  <td>{d.address?.street}, {d.address?.city}{d.address?.apartment?` — ${d.address.apartment}`:''}{d.address?.doorCode?` (קוד: ${d.address.doorCode})`:''}</td>
+                  <td>{d.phone ? <a className="link" href={`tel:${d.phone}`}>{d.phone}</a> : '—'}</td>
+                  <td>{d.packageCount ?? 1}</td>
+                  <td className="max-w-[260px] truncate" title={d.notes || ''}>{d.notes || '—'}</td>
+                  <td><StatusBadge status={d.status}/></td>
+                  <td className="flex flex-wrap gap-1">
+                    <div className="join">
+                      <button className="btn btn-xs join-item" onClick={()=>setStatus(d.id,'in_transit')}>בדרך</button>
+                      <button className="btn btn-xs join-item btn-success" onClick={()=>setStatus(d.id,'delivered')}>נמסרה</button>
+                      <button className="btn btn-xs join-item btn-error" onClick={()=>setStatus(d.id,'returned')}>חזרה</button>
+                    </div>
+                    <button className="btn btn-xs" onClick={()=>releaseAssignment(d.id)}>שחרר</button>
+                    {d.status==='delivered' && (
+                      <button className="btn btn-xs btn-outline" onClick={()=>completeAfterDelivered(d.id)}>סיים משימה</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
               </tbody>
             </table>
             <div className="mt-3 text-sm opacity-80">
-              סה״כ שובצו לך: <b>{my.length}</b> משלוחים (מסתיר משלוחים שסומנו "סיים משימה").
+              סה״כ שובצו לך: <b>{my.length}</b> משלוחים (מסתיר פריטים שסומנו "סיים משימה").
             </div>
           </div>
         )}
@@ -310,14 +241,8 @@ export default function Volunteer() {
   )
 }
 
-function Badge({ status }) {
+function StatusBadge({status}){
   const he = { pending:'ממתין', assigned:'הוקצה', in_transit:'בדרך', delivered:'נמסרה', returned:'חזרה למחסן' }
-  const color = {
-    pending:'badge-warning',
-    assigned:'badge-info',
-    in_transit:'badge-accent',
-    delivered:'badge-success',
-    returned:'badge-error'
-  }[status] || 'badge-ghost'
+  const color = { pending:'badge-warning', assigned:'badge-info', in_transit:'badge-accent', delivered:'badge-success', returned:'badge-error' }[status] || 'badge-ghost'
   return <span className={`badge ${color}`}>{he[status] || status}</span>
 }
