@@ -1,5 +1,5 @@
 // web/src/pages/AdminVolunteers.jsx
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth, db, serverTimestamp } from '../lib/firebase'
 import {
@@ -18,7 +18,7 @@ async function isAdmin() {
 
 export default function AdminVolunteers() {
   const nav = useNavigate()
-  const [allowed, setAllowed] = useState(null) // null = טוען, true/false = תוצאה
+  const [allowed, setAllowed] = useState(null) // null=טוען, true/false=תוצאה
   const [errMsg, setErrMsg] = useState('')
 
   useEffect(()=>{
@@ -37,10 +37,9 @@ export default function AdminVolunteers() {
   if (allowed === null) return <Wrap><div className="opacity-60">טוען…</div></Wrap>
   if (!allowed) return <Wrap><h3>אין הרשאת אדמין</h3>{errMsg && <div className="alert mt-3"><span>{errMsg}</span></div>}</Wrap>
 
-  // מתנדבים (אוסף volunteers – נוצר ע"י צד מתנדב)
+  // מתנדבים
   const [vols, setVols] = useState([])
   useEffect(()=>{
-    if (!allowed) return
     const un = onSnapshot(
       collection(db,'volunteers'),
       snap=>{
@@ -55,16 +54,16 @@ export default function AdminVolunteers() {
       }
     )
     return ()=>un()
-  },[allowed])
+  },[])
 
-  // חישוב "מחובר עכשיו" לפי lastSeen בתוך 2 דקות
+  // "מחובר עכשיו" (2 דקות אחרונות)
   function isOnline(v){
     const t = v?.lastSeen?.seconds ? v.lastSeen.seconds*1000 : (v?.lastSeen || 0)
     return Date.now() - t < 2*60*1000
   }
 
-  // סטטיסטיקות – נסיק counters מהשרת (ללא הורדת כל הרשומות)
-  const [stats, setStats] = useState({}) // { uid: {assigned: X, delivered: Y} }
+  // סטטיסטיקות — ספירת משימות לכל מתנדב
+  const [stats, setStats] = useState({})
   useEffect(()=>{
     async function loadCounts(){
       const next = {}
@@ -99,7 +98,7 @@ export default function AdminVolunteers() {
         status: 'assigned',
         updatedAt: serverTimestamp()
       })
-      // מחיקת pending_index אם קיים (עובד עם הכללים החדשים)
+      // מחיקת pending_index אם קיים (מותר לפי החוקים הפשוטים)
       await deleteDoc(doc(db,'pending_index', deliveryId.trim())).catch(()=>{})
       setMsg('המשלוח הוקצה בהצלחה')
       setDeliveryId('')
@@ -134,7 +133,7 @@ export default function AdminVolunteers() {
           <button className="btn btn-primary" onClick={assignManually}>הקצה</button>
         </div>
         {msg && <div className="alert mt-3"><span>{msg}</span></div>}
-        <div className="text-xs opacity-70 mt-2">טיפ: את ה־ID של המשלוח אפשר להעתיק מעמוד המשלוחים (או מהקונסול).</div>
+        <div className="text-xs opacity-70 mt-2">טיפ: את ה־ID של המשלוח אפשר להעתיק מעמוד המשלוחים.</div>
       </div>
 
       {/* טבלת מתנדבים */}
