@@ -3,13 +3,14 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth, db, serverTimestamp } from '../lib/firebase'
 import {
-  collection, doc, getDocs, onSnapshot, query, updateDoc, where, deleteDoc, limit, setDoc
+  collection, doc, getDocs, onSnapshot, query,
+  updateDoc, where, deleteDoc, limit, setDoc
 } from 'firebase/firestore'
 
 export default function Volunteer() {
   const nav = useNavigate()
 
-  // משתמש מחובר (לא אנונימי)
+  // משתמש רשום (לא אנונימי)
   const [user, setUser] = useState(auth.currentUser)
   useEffect(() => {
     const un = auth.onAuthStateChanged(async u => {
@@ -34,7 +35,10 @@ export default function Volunteer() {
     return ()=>clearInterval(iv)
   }, [user])
 
-  const displayName = useMemo(() => user ? (user.displayName || (user.email ? user.email.split('@')[0] : 'מתנדב')) : '', [user])
+  const displayName = useMemo(
+    () => user ? (user.displayName || (user.email ? user.email.split('@')[0] : 'מתנדב')) : '',
+    [user]
+  )
 
   // שכונות פעילות
   const [neighborhoods, setNeighborhoods] = useState([])
@@ -46,21 +50,25 @@ export default function Volunteer() {
     return () => un()
   }, [])
 
-  // מונים של ממתינים (pending_index)
+  // מונים של pending לפי שכונה (pending_index)
   const [pendingCounts, setPendingCounts] = useState({})
   useEffect(() => {
     const un = onSnapshot(collection(db,'pending_index'), snap => {
-      const counts={}; snap.forEach(d=>{ const nb=d.data()?.neighborhood||''; if (!nb) return; counts[nb]=(counts[nb]||0)+1 })
+      const counts={}; snap.forEach(d=>{
+        const nb=d.data()?.neighborhood||''; if(!nb) return
+        counts[nb]=(counts[nb]||0)+1
+      })
       setPendingCounts(counts)
-    }); return () => un()
+    })
+    return () => un()
   }, [])
 
-  // בחירת שכונה + כמות
+  // בחירה לשיבוץ
   const [selectedNeighborhood, setSelectedNeighborhood] = useState('')
   const [wantedCount, setWantedCount] = useState(1)
   const [msg, setMsg] = useState('')
 
-  // המשלוחים שלי – לא מסתירים Delivered, מסתירים רק אם יש volunteerCompletedAt
+  // המשלוחים שלי (לא מסתיר Delivered; מסתיר רק אם יש volunteerCompletedAt)
   const [my, setMy] = useState([])
   const [myErr, setMyErr] = useState('')
   useEffect(() => {
@@ -69,17 +77,17 @@ export default function Volunteer() {
     const un = onSnapshot(
       qMine,
       snap => {
-        const arr=[]; snap.forEach(d => arr.push({id:d.id, ...d.data()}))
+        const arr=[]; snap.forEach(d=>arr.push({id:d.id, ...d.data()}))
         arr.sort((a,b)=> (b.updatedAt?.seconds||b.createdAt?.seconds||0) - (a.updatedAt?.seconds||a.createdAt?.seconds||0))
         const visible = arr.filter(x => !(x.status==='delivered' && x.volunteerCompletedAt))
         setMy(visible); setMyErr('')
       },
-      err => { console.error('deliveries snapshot error', err); setMyErr('אין הרשאה/נתונים להצגה') }
+      err => { console.error(err); setMyErr('אין הרשאה/נתונים להצגה') }
     )
     return () => un()
   }, [user])
 
-  // CLAIM
+  // קבל שיבוץ (CLAIM)
   async function claimAssignments() {
     if (!user) return
     if (!selectedNeighborhood) { setMsg('בחר שכונה'); return }
@@ -93,7 +101,7 @@ export default function Volunteer() {
     let ok=0
     for (const d of snap.docs){
       if (ok>=want) break
-      const id=d.id
+      const id = d.id
       try{
         await updateDoc(doc(db,'deliveries', id), {
           assignedVolunteerId: user.uid,
@@ -102,18 +110,18 @@ export default function Volunteer() {
         })
         await deleteDoc(doc(db,'pending_index', id)).catch(()=>{})
         ok++
-      }catch(e){ /* כנראה מישהו אחר תפס */ }
+      }catch(e){ /* כנראה מישהו אחר לקח במקביל */ }
     }
     setMsg(ok ? `שובצו ${ok} משלוחים` : 'לא הצלחתי לשבץ, נסה שוב בעוד רגע')
   }
 
-  // שינוי סטטוס – משמרים את השיוך כדי ש-Delivered לא "ייעלם"
+  // שינוי סטטוס — משמרים שיוך כדי שלא "ייעלם" אחרי נמסרה
   async function setStatus(id, status) {
     try{
       await updateDoc(doc(db,'deliveries', id), {
         status,
         updatedAt: serverTimestamp(),
-        assignedVolunteerId: auth.currentUser?.uid || null   // <<< שומר את השיוך
+        assignedVolunteerId: auth.currentUser?.uid || null
       })
     }catch(e){
       console.error('setStatus failed', e)
@@ -121,7 +129,7 @@ export default function Volunteer() {
     }
   }
 
-  // שחרור שיבוץ (והחזרה ל-pending_index)
+  // שחרור שיבוץ (כולל יצירת אינדקס)
   async function releaseAssignment(id) {
     if (!confirm('לשחרר את המשלוח הזה מהשיבוץ שלך?')) return
     const item = my.find(x=>x.id===id)
@@ -134,7 +142,7 @@ export default function Volunteer() {
     }
   }
 
-  // סיום משימה (אחרי "נמסרה") – נשאר Delivered אבל נעלם מהרשימה
+  // סיים משימה (אחרי "נמסרה") – נשאר Delivered אבל נעלם מהרשימה
   async function completeAfterDelivered(id) {
     const ok = confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')
     if (!ok) return
@@ -161,10 +169,10 @@ export default function Volunteer() {
       <div className="mb-6 p-4 rounded-xl border bg-base-100">
         <div className="font-semibold mb-2">איך זה עובד?</div>
         <ol className="list-decimal pr-5 space-y-1 text-sm">
-          <li>בחר/י <b>שכונה</b> וכמה משלוחים לקבל כעת.</li>
+          <li>בחר/י שכונה וכמה משלוחים לקבל עכשיו.</li>
           <li>לחץ/י <b>📦 קבל שיבוץ</b>.</li>
           <li>עדכן/י סטטוס: <em>בדרך</em> / <em>נמסרה</em> / <em>חזרה</em>, או <b>שחרר</b>.</li>
-          <li>אחרי <b>נמסרה</b> יופיע <b>סיים משימה</b> שמעלים את השורה (המשלוח נשאר Delivered באדמין).</li>
+          <li>אחרי <b>נמסרה</b> – לחץ/י <b>סיים משימה</b> כדי להסתיר מהרשימה (המשלוח נשאר Delivered באדמין).</li>
         </ol>
       </div>
 
@@ -184,7 +192,8 @@ export default function Volunteer() {
           </div>
           <div>
             <label className="label"><span className="label-text">כמות משלוחים</span></label>
-            <input type="number" min="1" className="input input-bordered w-40" value={wantedCount} onChange={e=>setWantedCount(e.target.value)} />
+            <input type="number" min="1" className="input input-bordered w-40"
+                   value={wantedCount} onChange={e=>setWantedCount(e.target.value)} />
           </div>
           <button className="btn btn-primary" onClick={claimAssignments} disabled={!selectedNeighborhood}>📦 קבל שיבוץ</button>
         </div>
