@@ -145,26 +145,27 @@ export default function Volunteer() {
     setMsg(ok ? `שובצו ${ok} משלוחים` : 'לא הצלחתי לשבץ, נסה שוב בעוד רגע')
   }
 
-  // שינוי סטטוס — משמרים שיוך; ב-"נמסרה" כותבים גם deliveredBy/deliveredAt
-  async function setStatus(id, status) {
-    try{
-      const patch = {
-        status,
-        updatedAt: serverTimestamp(),
-        assignedVolunteerId: auth.currentUser?.uid || null
-      }
-      if (status === 'delivered') {
-        patch.deliveredBy = auth.currentUser?.uid || null
-        patch.deliveredAt = serverTimestamp()
-      }
-      await updateDoc(doc(db,'deliveries', id), patch)
-    }catch(e){
-      console.error('setStatus failed', e)
-      alert('שגיאה בעדכון סטטוס: '+(e?.message||e))
-    }
-  }
+	async function setStatus(id, status) {
+	  try{
+		const patch = {
+		  status,
+		  updatedAt: serverTimestamp(),
+		  assignedVolunteerId: auth.currentUser?.uid || null
+		}
+		if (status === 'delivered') {
+		  patch.deliveredBy = auth.currentUser?.uid || null
+		  patch.deliveredAt = serverTimestamp()
+		}
+		await updateDoc(doc(db,'deliveries', id), patch)
+	  }catch(e){
+		console.error('setStatus failed', e)
+		alert('שגיאה בעדכון סטטוס: '+(e?.message||e))
+	  }
+	}
 
-  // שחרור שיבוץ (מחזיר ל-pending ויוצר אינדקס כדי שהמונה יתעדכן)
+
+	// שחרור שיבוץ (מחזיר ל-pending ויוצר אינדקס כדי שהמונה יתעדכן)
+  // שינוי סטטוס — משמרים שיוך; ב-"נמסרה" כותבים גם deliveredBy/deliveredAt
   async function releaseAssignment(id) {
     if (!confirm('לשחרר את המשלוח הזה מהשיבוץ שלך?')) return
     const item = my.find(x=>x.id===id)
@@ -182,17 +183,18 @@ export default function Volunteer() {
     }
   }
 
-  // סיום משימה (אחרי "נמסרה") – נשאר Delivered אבל נעלם מהרשימה
-  async function completeAfterDelivered(id) {
-    const ok = confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')
-    if (!ok) return
-    try{
-      await updateDoc(doc(db,'deliveries', id), { volunteerCompletedAt: serverTimestamp() })
-    }catch(e){
-      console.error('completeAfterDelivered failed', e)
-      alert('שגיאה בסימון סיום משימה: '+(e?.message||e))
-    }
-  }
+	// 2) סיום משימה: הוספת try/catch + הודעת שגיאה ברורה
+	async function completeAfterDelivered(id) {
+	  const ok = confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')
+	  if (!ok) return
+	  try{
+		await updateDoc(doc(db,'deliveries', id), { volunteerCompletedAt: serverTimestamp() })
+	  }catch(e){
+		console.error('completeAfterDelivered failed', e)
+		alert('שגיאה בסימון סיום משימה: '+(e?.message||e))
+	  }
+	}
+
 
   if (!user || user.isAnonymous) return null
 
