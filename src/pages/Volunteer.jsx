@@ -29,7 +29,7 @@ export default function Volunteer() {
     return () => un()
   }, [nav])
 
-  // heartbeat כל דקה
+  // heartbeat כל דקה (מחובר עכשיו לאדמין)
   useEffect(()=>{
     if (!user || user.isAnonymous) return
     const iv = setInterval(()=>{
@@ -58,7 +58,7 @@ export default function Volunteer() {
     return () => un()
   }, [])
 
-  // ספירות "ממתין" לפי שכונה מתוך pending_index
+  // ספירת ממתינים (pending_index)
   const [pendingCounts, setPendingCounts] = useState({})
   useEffect(() => {
     const un = onSnapshot(
@@ -77,7 +77,7 @@ export default function Volunteer() {
     return () => un()
   }, [])
 
-  // בחירת שכונה + כמות
+  // בחירה לשיבוץ
   const [selectedNeighborhood, setSelectedNeighborhood] = useState('')
   const [wantedCount, setWantedCount] = useState(1)
   const [msg, setMsg] = useState('')
@@ -93,13 +93,13 @@ export default function Volunteer() {
       snap => {
         const arr=[]
         snap.forEach(d => arr.push({id:d.id, ...d.data()}))
-        // מיון אחרון מתעדכן למעלה
+        // חדש: מיון אחרון מתעדכן למעלה
         arr.sort((a,b)=>{
           const ta = (a.updatedAt?.seconds||a.createdAt?.seconds||0)
           const tb = (b.updatedAt?.seconds||b.createdAt?.seconds||0)
           return tb-ta
         })
-        // מסתיר פריטים שסומנו "סיים משימה" אחרי נמסרה
+        // חשוב: לא מסתירים Delivered; מסתירים רק אם user סימן "סיים משימה"
         const visible = arr.filter(x => !(x.status==='delivered' && x.volunteerCompletedAt))
         setMy(visible)
         setMyErr('')
@@ -112,7 +112,7 @@ export default function Volunteer() {
     return () => un()
   }, [user])
 
-  // CLAIM דרך pending_index
+  // CLAIM
   async function claimAssignments() {
     if (!user) return
     if (!selectedNeighborhood) { setMsg('בחר שכונה'); return }
@@ -146,7 +146,7 @@ export default function Volunteer() {
     setMsg(ok ? `שובצו ${ok} משלוחים` : 'לא הצלחתי לשבץ, נסה שוב בעוד רגע')
   }
 
-  // סטטוס — “ביטוח שיוך” + טיפול שגיאה
+  // שינוי סטטוס — לא משחרר; "ביטוח שיוך" כדי שלא ייעלם אחרי נמסרה
   async function setStatus(id, status) {
     try {
       await updateDoc(doc(db,'deliveries', id), {
@@ -160,7 +160,7 @@ export default function Volunteer() {
     }
   }
 
-  // שחרור שיבוץ (לעצמו) + יצירת אינדקס כדי שהספירה תעלה מיד
+  // שחרור שיבוץ (לעצמו) + יצירת אינדקס מיידית
   async function releaseAssignment(id) {
     if (!confirm('לשחרר את המשלוח הזה מהשיבוץ שלך?')) return
     const item = my.find(x=>x.id === id)
@@ -181,7 +181,7 @@ export default function Volunteer() {
     }
   }
 
-  // סיום משימה אחרי "נמסרה" — נשאר Delivered אבל נעלם מהרשימה
+  // סיום משימה אחרי "נמסרה" — נשאר Delivered אבל נעלם מהרשימה (שואל לפני)
   async function completeAfterDelivered(id) {
     const ok = confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')
     if (!ok) return
@@ -220,7 +220,6 @@ export default function Volunteer() {
       {/* שיבוץ לפי שכונה */}
       <div className="mb-6 p-4 rounded-xl border bg-base-100">
         <div className="font-semibold mb-2">שיבוץ לפי שכונה</div>
-
         <div className="flex flex-wrap gap-3 items-end">
           <div>
             <label className="label"><span className="label-text">שכונה</span></label>
@@ -234,21 +233,18 @@ export default function Volunteer() {
               })}
             </select>
           </div>
-
           <div>
             <label className="label"><span className="label-text">כמות משלוחים</span></label>
             <input type="number" min="1" className="input input-bordered w-40"
                    value={wantedCount}
                    onChange={e=>setWantedCount(e.target.value)} />
           </div>
-
           <button className="btn btn-primary" onClick={claimAssignments} disabled={!selectedNeighborhood}>📦 קבל שיבוץ</button>
         </div>
-
         {msg && <div className="alert mt-3"><span>{msg}</span></div>}
       </div>
 
-      {/* הטבלה – שינוי סטטוס + שחרור + סיים משימה */}
+      {/* הטבלה */}
       <div className="p-4 rounded-xl border bg-base-100">
         <div className="font-semibold mb-2">המשלוחים ששובצו לך</div>
 
@@ -293,10 +289,7 @@ export default function Volunteer() {
                         <button className="btn btn-xs join-item btn-success" onClick={()=>setStatus(d.id,'delivered')}>נמסרה</button>
                         <button className="btn btn-xs join-item btn-error" onClick={()=>setStatus(d.id,'returned')}>חזרה</button>
                       </div>
-
                       <button className="btn btn-xs" onClick={()=>releaseAssignment(d.id)}>שחרר</button>
-
-                      {/* "סיים משימה" – רק אם נמסרה */}
                       {d.status === 'delivered' && (
                         <button className="btn btn-xs btn-outline" onClick={()=>completeAfterDelivered(d.id)}>
                           סיים משימה
