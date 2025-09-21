@@ -60,7 +60,7 @@ export default function App()
       <NavBar />
       <Routes>
         {/* דף הבית = כניסה */}
-        <Route path="/" element={<Landing />} />
+        <Route path="/" element={<Login />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/admin/volunteers" element={<AdminVolunteers />} />
         <Route path="/admin/edits" element={<AdminEditRequests />} />
