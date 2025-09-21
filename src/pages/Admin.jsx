@@ -519,13 +519,13 @@ export default function Admin() {
       {/* פעולות עליונות */}
       <div className="flex flex-wrap gap-2 mb-3">
         <button className="btn btn-primary" onClick={addDelivery}>הוסף משלוח</button>
-        <button className="btn" onClick={()=>fileRef.current?.click()}>ייבוא קובץ (CSV/XLSX)</button>
+        <button className="btn btn-outline" onClick={()=>fileRef.current?.click()}>ייבוא קובץ (CSV/XLSX)</button>
         <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" hidden onChange={e=>e.target.files[0]&&importFile(e.target.files[0])}/>
         <button className="btn btn-outline" onClick={addNeighborhood}>הוסף שכונה</button>
         <button className="btn btn-outline" onClick={syncNeighborhoodsFromDeliveries}>סנכרן שכונות</button>
         <button className="btn btn-outline" onClick={rebuildPendingIndex}>שחזר אינדקס ממתינים</button>
         <button className="btn btn-outline btn-error" onClick={deleteAll}>מחק הכל</button>
-		<button className="btn btn-sm btn-primary" onClick={geocodeMissing}>
+		<button className="btn btn-primary" onClick={geocodeMissing}>
 		גיאוקוד לרשומות חסרות
 		</button>
 

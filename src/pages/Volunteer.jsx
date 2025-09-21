@@ -290,7 +290,7 @@ export default function Volunteer() {
                     <td className="max-w-[260px] truncate" title={d.notes || ''}>{d.notes || '—'}</td>
                     <td><StatusBadge status={d.status}/></td>
                     <td className="flex flex-wrap gap-1">
-                      <WazeLink lat={d.lat} lng={d.lng} address={addrString(d.address)} label={"וויז"} className={"btn btn-primary btn-xs"} title={"פתח ניווט ב-Waze"} />
+                      <WazeLink lat={d.lat} lng={d.lng} address={addrString(d.address)} label={"ניווט עם וויז"} className={"btn btn-primary btn-xs"} title={"פתח ניווט ב-Waze"} />
                       <div className="join">
                         <button className="btn btn-xs join-item" onClick={()=>setStatus(d.id,'in_transit')}>בדרך</button>
                         <button className="btn btn-xs join-item btn-success" onClick={()=>setStatus(d.id,'delivered')}>נמסרה</button>
