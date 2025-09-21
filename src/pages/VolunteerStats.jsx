@@ -1,203 +1,187 @@
-// web/src/pages/Volunteer.jsx
+// web/src/pages/VolunteerStats.jsx
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { auth, db, serverTimestamp } from '../lib/firebase'
+import { auth, db } from '../lib/firebase'
 import {
-  collection, doc, getDocs, onSnapshot, query,
-  updateDoc, where, deleteDoc, limit, setDoc
+  collection, doc, getDocs, onSnapshot, query, where, setDoc
 } from 'firebase/firestore'
+import { getCountFromServer } from 'firebase/firestore'
 
-// ← חדש
-import RequestEditModal from '../components/RequestEditModal'
+function startOfDay(d=new Date()){ const x=new Date(d); x.setHours(0,0,0,0); return x }
+function startOfWeek(d=new Date()){ const x=startOfDay(d); const day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); return x }
+function startOfMonth(d=new Date()){ const x=startOfDay(d); x.setDate(1); return x }
 
-export default function Volunteer() {
+export default function VolunteerStats(){
   const nav = useNavigate()
-
-  // משתמש מחובר (לא אנונימי)
   const [user, setUser] = useState(auth.currentUser)
-  useEffect(() => {
-    const un = auth.onAuthStateChanged(async u => {
+
+  useEffect(()=>{
+    const un = auth.onAuthStateChanged(u=>{
       setUser(u)
-      if (!u || u.isAnonymous) { nav('/'); return }
-      // פרופיל מתנדב + heartbeat ראשוני
-      await setDoc(doc(db,'volunteers', u.uid), {
-        displayName: u.displayName || (u.email ? u.email.split('@')[0] : 'מתנדב'),
-        email: u.email || null,
-        lastSeen: serverTimestamp(),
-      }, { merge: true })
+      if (!u || u.isAnonymous) nav('/')
     })
-    return () => un()
+    return ()=>un()
   }, [nav])
 
-  // heartbeat כל דקה
+  // יעדים אישיים
+  const [goals, setGoals] = useState({ daily: 5, weekly: 20, monthly: 40 })
   useEffect(()=>{
-    if (!user || user.isAnonymous) return
-    const iv = setInterval(()=>{
-      setDoc(doc(db,'volunteers', user.uid), { lastSeen: serverTimestamp() }, { merge: true })
-    }, 60*1000)
-    return ()=>clearInterval(iv)
+    if (!user) return
+    const un = onSnapshot(doc(db,'volunteers', user.uid), snap=>{
+      const v = snap.data() || {}
+      if (v.goals) setGoals(v.goals)
+    })
+    return ()=>un()
   }, [user])
 
-  const displayName = useMemo(
-    () => user ? (user.displayName || (user.email ? user.email.split('@')[0] : 'מתנדב')) : '',
-    [user]
-  )
-
-  // שכונות פעילות
-  const [neighborhoods, setNeighborhoods] = useState([])
-  useEffect(() => {
-    const un = onSnapshot(
-      collection(db,'neighborhoods'),
-      snap => {
-        const arr=[]; snap.forEach(d=>arr.push({id:d.id, ...d.data()}))
-        setNeighborhoods(arr.filter(n=>n.active).sort((a,b)=>a.name.localeCompare(b.name,'he')))
-      }
-    )
-    return () => un()
-  }, [])
-
-  // ספירת ממתינים מכל שכונה (pending_index)
-  const [pendingCounts, setPendingCounts] = useState({})
-  useEffect(() => {
-    const un = onSnapshot(collection(db,'pending_index'), snap => {
-      const counts={}; snap.forEach(d=>{
-        const nb=d.data()?.neighborhood||''; if(!nb) return
-        counts[nb]=(counts[nb]||0)+1
-      })
-      setPendingCounts(counts)
-    })
-    return () => un()
-  }, [])
-
-  // בחירה לשיבוץ
-  const [selectedNeighborhood, setSelectedNeighborhood] = useState('')
-  const [wantedCount, setWantedCount] = useState(1)
-  const [msg, setMsg] = useState('')
-
-  // ===================== המשלוחים שלי (שאילתה עם דגל השלמה) =====================
-  const [my, setMy] = useState([])
-  const [myErr, setMyErr] = useState('')
-
-  useEffect(() => {
+  // סיכומי נמסרה (למשתמש)
+  const [counts, setCounts] = useState({ day:0, week:0, month:0 })
+  useEffect(()=>{
     if (!user) return
-    // מציג רק משלוחים ששויכו אליי ושלא הושלמו
-    const qMine = query(
-      collection(db,'deliveries'),
-      where('assignedVolunteerId','==', user.uid),
-      where('volunteerCompleted','==', false)
-    )
-
-    const un = onSnapshot(qMine, snap => {
-      const arr=[]; snap.forEach(d=>arr.push({id:d.id, ...d.data()}))
-      arr.sort((x,y)=>{
-        const tx = (x.updatedAt?.seconds||x.createdAt?.seconds||0)
-        const ty = (y.updatedAt?.seconds||y.createdAt?.seconds||0)
-        return ty - tx
-      })
-      setMy(arr)
-      setMyErr('')
-    }, err => {
-      console.error('deliveries snapshot error', err)
-      setMyErr('אין הרשאה/נתונים להצגה')
-    })
-
-    return () => un()
+    async function load(){
+      const qMine = query(collection(db,'deliveries'),
+        where('assignedVolunteerId','==', user.uid),
+        where('status','==','delivered')
+      )
+      const snap = await getDocs(qMine)
+      const list=[]; snap.forEach(d=>list.push(d.data()))
+      const now=new Date()
+      const d0=startOfDay(now).getTime()/1000
+      const w0=startOfWeek(now).getTime()/1000
+      const m0=startOfMonth(now).getTime()/1000
+      let cDay=0,cWeek=0,cMonth=0
+      for (const r of list){
+        const t=r.updatedAt?.seconds || r.createdAt?.seconds || 0
+        if (t>=d0) cDay++
+        if (t>=w0) cWeek++
+        if (t>=m0) cMonth++
+      }
+      setCounts({ day:cDay, week:cWeek, month:cMonth })
+    }
+    load()
   }, [user])
-  // ================================================================================
 
-  // קבל שיבוץ (CLAIM) דרך pending_index
-  async function claimAssignments() {
+  async function saveGoals(){
     if (!user) return
-    if (!selectedNeighborhood) { setMsg('בחר שכונה'); return }
-    const want = Math.max(1, Number(wantedCount||1))
-    setMsg('מנסה לשבץ…')
-
-    const qIds = query(
-      collection(db,'pending_index'),
-      where('neighborhood','==', selectedNeighborhood),
-      limit(want*3)
-    )
-    const snap = await getDocs(qIds)
-    if (snap.empty) { setMsg('אין משלוחים זמינים בשכונה הזו כרגע'); return }
-
-    let ok=0
-    for (const d of snap.docs){
-      if (ok>=want) break
-      const id = d.id
-      try{
-        await updateDoc(doc(db,'deliveries', id), {
-          assignedVolunteerId: user.uid,
-          status: 'assigned',
-          updatedAt: serverTimestamp(),
-          volunteerCompleted: false   // ← דגל התחלה
-        })
-        await deleteDoc(doc(db,'pending_index', id)).catch(()=>{})
-        ok++
-      }catch(e){ /* מישהו אחר לקח במקביל */ }
-    }
-    setMsg(ok ? `שובצו ${ok} משלוחים` : 'לא הצלחתי לשבץ, נסה שוב בעוד רגע')
+    await setDoc(doc(db,'volunteers', user.uid), { goals }, { merge: true })
+    alert('היעדים נשמרו!')
   }
 
-  // שינוי סטטוס — משמרים שיוך; ב-"נמסרה" כותבים גם deliveredBy/deliveredAt
-  async function setStatus(id, status) {
-    try{
-      const patch = {
-        status,
-        updatedAt: serverTimestamp(),
-        assignedVolunteerId: auth.currentUser?.uid || null
-      }
-      if (status === 'delivered') {
-        patch.deliveredBy = auth.currentUser?.uid || null
-        patch.deliveredAt = serverTimestamp()
-      }
-      await updateDoc(doc(db,'deliveries', id), patch)
-    }catch(e){
-      console.error('setStatus failed', e)
-      alert('שגיאה בעדכון סטטוס: '+(e?.message||e))
-    }
-  }
-
-  // שחרור שיבוץ (מחזיר ל-pending ויוצר אינדקס כדי שהמונה יתעדכן)
-  async function releaseAssignment(id) {
-    if (!confirm('לשחרר את המשלוח הזה מהשיבוץ שלך?')) return
-    const item = my.find(x=>x.id===id)
-    const nb = item?.address?.neighborhood || ''
-    try{
-      await updateDoc(doc(db,'deliveries', id), {
-        status:'pending', assignedVolunteerId:null, updatedAt: serverTimestamp(),
-        volunteerCompleted: false
+  // ---------- Leaderboard: Top 5 ----------
+  const [leaders, setLeaders] = useState([]) // [{uid, name, delivered}]
+  useEffect(()=>{
+    async function buildLeaderboard(){
+      // מביאים את כל המתנדבים (דורש rule: read ל-volunteers לכל מחובר)
+      const vsnap = await getDocs(collection(db,'volunteers'))
+      const vols = []
+      vsnap.forEach(d=>{
+        const v = d.data() || {}
+        const name = v.displayName || (v.email ? v.email.split('@')[0] : d.id.slice(0,6))
+        vols.push({ id:d.id, name })
       })
-      await setDoc(doc(db,'pending_index', id), {
-        neighborhood: nb, createdAt: serverTimestamp()
-      }, { merge:true })
-    }catch(e){
-      console.error('releaseAssignment failed', e)
-      alert('שגיאה בשחרור: '+(e?.message||e))
+      // עבור כל מתנדב מבקשים ספירה של delivered (Aggregate)
+      const rows = []
+      for (const v of vols){
+        const qDelivered = query(
+          collection(db,'deliveries'),
+          where('assignedVolunteerId','==', v.id),
+          where('status','==','delivered')
+        )
+        const agg = await getCountFromServer(qDelivered)
+        rows.push({ uid:v.id, name:v.name, delivered: agg.data().count })
+      }
+      rows.sort((a,b)=> b.delivered - a.delivered)
+      setLeaders(rows.slice(0,5))
     }
-  }
+    buildLeaderboard()
+  }, [])
 
-  // סיום משימה (אחרי "נמסרה") – נשאר Delivered באדמין, נעלם מהרשימה כאן
-  async function completeAfterDelivered(id) {
-    const ok = confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')
-    if (!ok) return
-    try{
-      await updateDoc(doc(db,'deliveries', id), {
-        volunteerCompleted: true,
-        updatedAt: serverTimestamp()
-      })
-    }catch(e){
-      console.error('completeAfterDelivered failed', e)
-      alert('שגיאה בסימון סיום משימה: '+(e?.message||e))
-    }
-  }
-
-  // ===== חדש: מצב/מודאל בקשת תיקון =====
-  const [editOpen, setEditOpen] = useState(false)
-  const [editDeliveryId, setEditDeliveryId] = useState(null)
-  const openEdit = (id) => { setEditDeliveryId(id); setEditOpen(true) }
-  const closeEdit = () => { setEditOpen(false); setEditDeliveryId(null) }
-
-  if (!user || user.isAnonymous) return null
+  if (!user) return null
 
   return (
-    <div dir="rtl" c
+    <div dir="rtl" className="max-w-4xl mx-auto p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold">סיכומים ויעדים</h2>
+        <button className="btn btn-ghost" onClick={()=>nav('/volunteer')}>חזרה לדף מתנדב</button>
+      </div>
+
+      {/* כרטיסי סטטוס מול יעד */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard title="היום" value={counts.day} goal={goals.daily}/>
+        <StatCard title="השבוע" value={counts.week} goal={goals.weekly}/>
+        <StatCard title="החודש" value={counts.month} goal={goals.monthly}/>
+      </div>
+
+      {/* הגדרת יעדים */}
+      <div className="mt-6 p-4 rounded-xl border bg-base-100">
+        <div className="font-semibold mb-3">הגדרת יעדים</div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <NumInput label="יעד יומי" value={goals.daily} onChange={v=>setGoals({...goals, daily:v})}/>
+          <NumInput label="יעד שבועי" value={goals.weekly} onChange={v=>setGoals({...goals, weekly:v})}/>
+          <NumInput label="יעד חודשי" value={goals.monthly} onChange={v=>setGoals({...goals, monthly:v})}/>
+        </div>
+        <button className="btn btn-primary mt-4" onClick={saveGoals}>שמור יעדים</button>
+      </div>
+
+      {/* Leaderboard */}
+      <div className="mt-6 p-4 rounded-xl border bg-base-100">
+        <div className="font-semibold mb-3">ה־5 שחילקו הכי הרבה</div>
+        {leaders.length === 0 ? (
+          <div className="opacity-60 text-sm">אין נתונים להצגה עדיין</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table w-full">
+              <thead>
+                <tr>
+                  <th>מקום</th>
+                  <th>מתנדב</th>
+                  <th>משלוחים שנמסרו</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaders.map((r,idx)=>(
+                  <tr key={r.uid} className={idx===0 ? 'bg-base-200' : idx===1 ? 'bg-base-100' : ''}>
+                    <td>
+                      <span className={`badge ${idx===0?'badge-warning':idx===1?'':'badge-ghost'}`}>
+                        #{idx+1}
+                      </span>
+                    </td>
+                    <td><b>{r.name}</b></td>
+                    <td>
+                      <span className="badge badge-success">{r.delivered}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function NumInput({label, value, onChange}){
+  return (
+    <div>
+      <label className="label"><span className="label-text">{label}</span></label>
+      <input type="number" min="0" className="input input-bordered w-full"
+             value={value} onChange={e=>onChange(Number(e.target.value)||0)} />
+    </div>
+  )
+}
+
+function StatCard({title, value, goal}){
+  const pct = goal>0 ? Math.min(100, Math.round((value/goal)*100)) : 0
+  return (
+    <div className="p-4 rounded-xl border bg-base-100">
+      <div className="text-sm opacity-70 mb-1">{title}</div>
+      <div className="text-2xl font-bold">{value}</div>
+      <div className="mt-2">
+        <div className="text-xs mb-1">יעד: {goal}</div>
+        <progress className="progress w-full" value={pct} max="100"/>
+        <div className="text-xs mt-1">{pct}% מהיעד</div>
+      </div>
+    </div>
+  )
+}
