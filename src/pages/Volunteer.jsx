@@ -204,7 +204,7 @@ export default function Volunteer() {
     const nb = item?.address?.neighborhood || ''
     try{
       await updateDoc(doc(db,'deliveries', id), {
-        status:'pending', assignedVolunteerId:null, updatedAt: serverTimestamp()
+        status:'delivered', assignedVolunteerId:null, updatedAt: serverTimestamp()
       })
       await setDoc(doc(db,'pending_index', id), {
         neighborhood: nb, createdAt: serverTimestamp()
