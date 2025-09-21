@@ -146,20 +146,20 @@ export default function Volunteer() {
   }
 
 	async function setStatus(id, status) {
-	  try{
+	  try {
 		const patch = {
 		  status,
 		  updatedAt: serverTimestamp(),
-		  assignedVolunteerId: auth.currentUser?.uid || null
+		  assignedVolunteerId: auth.currentUser?.uid || null // שומר שיוך !
 		}
 		if (status === 'delivered') {
 		  patch.deliveredBy = auth.currentUser?.uid || null
 		  patch.deliveredAt = serverTimestamp()
 		}
 		await updateDoc(doc(db,'deliveries', id), patch)
-	  }catch(e){
+	  } catch (e) {
 		console.error('setStatus failed', e)
-		alert('שגיאה בעדכון סטטוס: '+(e?.message||e))
+		alert('שגיאה בעדכון סטטוס: ' + (e?.message || e))
 	  }
 	}
 
@@ -200,20 +200,19 @@ export default function Volunteer() {
     // סיום משימה (אחרי "נמסרה") – נשאר Delivered אבל נעלם מהרשימה
   async function completeAfterDelivered(id) {
   if (!confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')) return
-    const item = my.find(x=>x.id===id)
-    const nb = item?.address?.neighborhood || ''
-    try{
-      await updateDoc(doc(db,'deliveries', id), {
-        status:'delivered', assignedVolunteerId:null, updatedAt: serverTimestamp()
-      })
-      await setDoc(doc(db,'delivered', id), {
-        volunteerCompletedAt: serverTimestamp()
-      }, { merge:true })
-    }catch(e){
-      console.error('releaseAssignment failed', e)
-      alert('שגיאה בשחרור: '+(e?.message||e))
-    }
+  try {
+    await updateDoc(doc(db, 'deliveries', id), {
+      volunteerCompletedAt: serverTimestamp(),   // סימון סיום משימה
+      updatedAt: serverTimestamp()               // שמירת עדכון אחרון
+      // שים לב: לא נוגעים ב-assignedVolunteerId!
+      // לא כותבים כלום לאוסף אחר!
+    })
+  } catch (e) {
+    console.error('completeAfterDelivered failed', e)
+    alert('שגיאה בסימון סיום משימה: ' + (e?.message || e))
   }
+}
+
 
   if (!user || user.isAnonymous) return null
 
