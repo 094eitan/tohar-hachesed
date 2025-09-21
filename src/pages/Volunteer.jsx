@@ -206,7 +206,7 @@ export default function Volunteer() {
         <div className="flex gap-2">
           <button className="btn btn-ghost" onClick={()=>nav('/volunteer/stats')}>סיכומים ויעדים</button>
           <a className="btn btn-ghost" href="/">דף הבית</a>
-		  <ThemeToggle />
+		  
         </div>
       </div>
 

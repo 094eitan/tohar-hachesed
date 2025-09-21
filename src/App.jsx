@@ -7,7 +7,7 @@ import Volunteer from './pages/Volunteer'
 import VolunteerStats from './pages/VolunteerStats'
 import { auth } from './lib/firebase'
 import AdminEditRequests from './pages/AdminEditRequests.jsx'
-
+import ThemeToggle from '../components/ThemeToggle'
 
 
 function NavBar() {
@@ -38,6 +38,7 @@ function NavBar() {
           <button className="btn btn-outline" onClick={doLogout}>
             התנתק
           </button>
+		  <ThemeToggle />
         )}
       </div>
     </nav>

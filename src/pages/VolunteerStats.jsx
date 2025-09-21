@@ -172,7 +172,7 @@ export default function VolunteerStats()
         <h2 className="text-xl font-semibold">סיכומים ויעדים</h2>
         <div className="flex items-center gap-2">
           {/* 🆕 כפתור מצב כהה/בהיר */}
-          <ThemeToggle />
+          
           <button className="btn btn-ghost" onClick={()=>nav('/volunteer')}>חזרה לדף מתנדב</button>
         </div>
       </div>
