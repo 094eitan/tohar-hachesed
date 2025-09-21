@@ -6,7 +6,7 @@ import {
   runTransaction, serverTimestamp, updateDoc
 } from "firebase/firestore";
 
-/* הרשאת אדמין כמו אצלך */
+/* בדיקת אדמין */
 async function isAdmin()
 {
   const uid = auth.currentUser?.uid;
@@ -19,8 +19,15 @@ async function isAdmin()
 export default function AdminEditRequests()
 {
   const [allowed, setAllowed] = useState(false);
+
+  // בקשות (pending)
   const [requests, setRequests] = useState([]);
+
+  // קאש של משלוחים (להשוואה לפני/אחרי)
   const [cacheDeliveries, setCacheDeliveries] = useState({}); // deliveryId -> delivery data
+
+  // 🆕 קאש של מתנדבים להצגת שם המבקש
+  const [cacheVolunteers, setCacheVolunteers] = useState({}); // uid -> {displayName,email}
 
   useEffect(() =>
   {
@@ -34,24 +41,46 @@ export default function AdminEditRequests()
       const un = onSnapshot(q, async snap =>
       {
         const arr = [];
-        const cache = { ...cacheDeliveries };
+        const dCache = { ...cacheDeliveries };
+        const vCache = { ...cacheVolunteers };
+
         for (const d of snap.docs)
         {
           const r = { id: d.id, ...d.data() };
           arr.push(r);
 
-          if (r.deliveryId && !cache[r.deliveryId])
+          // משלוח להשוואה
+          if (r.deliveryId && !dCache[r.deliveryId])
           {
             const ref = doc(db, "deliveries", r.deliveryId);
             const s = await getDoc(ref);
-            if (s.exists())
+            if (s.exists()) dCache[r.deliveryId] = { id: r.deliveryId, ...s.data() };
+          }
+
+          // 🆕 טעינת שם המתנדב שיצר את הבקשה
+          const createdBy = r.createdBy;
+          if (createdBy && !vCache[createdBy])
+          {
+            const vRef = doc(db, "volunteers", createdBy);
+            const vSnap = await getDoc(vRef);
+            if (vSnap.exists())
             {
-              cache[r.deliveryId] = { id: r.deliveryId, ...s.data() };
+              const v = vSnap.data() || {};
+              vCache[createdBy] = {
+                displayName: v.displayName || (v.email ? String(v.email).split("@")[0] : createdBy.slice(0,6)),
+                email: v.email || null
+              };
+            }
+            else
+            {
+              vCache[createdBy] = { displayName: createdBy.slice(0,6), email: null };
             }
           }
         }
+
         setRequests(arr);
-        setCacheDeliveries(cache);
+        setCacheDeliveries(dCache);
+        setCacheVolunteers(vCache);
       });
 
       return () => un();
@@ -60,6 +89,13 @@ export default function AdminEditRequests()
 
   if (!auth.currentUser) return <Wrap><h3>יש להתחבר תחילה</h3></Wrap>;
   if (!allowed) return <Wrap><NoAdmin /></Wrap>;
+
+  function volunteerLabel(uid)
+  {
+    const v = cacheVolunteers[uid];
+    if (!v) return uid ? (uid.length>6 ? uid.slice(0,6)+"…" : uid) : "לא ידוע";
+    return v.displayName || (v.email ? v.email.split("@")[0] : (uid.length>6 ? uid.slice(0,6)+"…" : uid));
+  }
 
   async function approve(req)
   {
@@ -80,19 +116,16 @@ export default function AdminEditRequests()
         const cur = delSnap.data() || {};
         const patch = {};
 
-        // החלת השינויים: אם יש address חלקי—נמזג לתוך הכתובת הקיימת
         if (data.changes.recipientName != null) patch.recipientName = data.changes.recipientName;
         if (data.changes.phone != null) patch.phone = data.changes.phone;
         if (data.changes.packageCount != null) patch.packageCount = data.changes.packageCount;
         if (data.changes.notes != null) patch.notes = data.changes.notes;
-
         if (data.changes.address)
         {
-          patch.address = { ...(cur.address || {}) , ...(data.changes.address || {}) };
+          patch.address = { ...(cur.address || {}), ...(data.changes.address || {}) };
         }
 
         tx.update(delRef, { ...patch, updatedAt: serverTimestamp() });
-
         tx.update(reqRef,
         {
           status: "approved",
@@ -155,6 +188,13 @@ export default function AdminEditRequests()
                   </div>
                 </div>
 
+                {/* 🆕 מי ביקש */}
+                <div className="mb-2 text-sm">
+                  <span className="opacity-70">נתבקשה ע״י:</span>{" "}
+                  <b>{volunteerLabel(r.createdBy)}</b>
+                  {r.createdBy ? <span className="opacity-60"> (UID: {r.createdBy})</span> : null}
+                </div>
+
                 <div className="mb-2">
                   <div>משלוח: <b>{del.recipientName || "—"}</b> (ID: {r.deliveryId})</div>
                   <div className="text-sm opacity-75">
@@ -191,11 +231,12 @@ export default function AdminEditRequests()
   );
 }
 
+/* 🟢 הדגשה בירוק בהיר + טקסט קריא */
 function DiffRow({label, before, after})
 {
   const changed = (after !== undefined) && (String(after) !== String(before ?? ""));
   return (
-    <tr className={changed ? "bg-yellow-50" : ""}>
+    <tr className={changed ? "bg-green-100 text-black" : ""}>
       <td className="font-medium">{label}</td>
       <td>{before ?? <span className="opacity-50">—</span>}</td>
       <td>{after ?? <span className="opacity-50">—</span>}</td>
