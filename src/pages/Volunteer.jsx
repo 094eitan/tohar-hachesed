@@ -183,6 +183,7 @@ export default function Volunteer() {
     }
   }
 
+/*
   // סיום משימה (אחרי "נמסרה") – נשאר Delivered אבל נעלם מהרשימה
   async function completeAfterDelivered(id) {
     const ok = confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')
@@ -194,6 +195,23 @@ export default function Volunteer() {
       alert('שגיאה בסימון סיום משימה: '+(e?.message||e))
     }
   }
+  */
+  
+    // סיום משימה (אחרי "נמסרה") – נשאר Delivered אבל נעלם מהרשימה
+  if (!confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')) return
+    const item = my.find(x=>x.id===id)
+    const nb = item?.address?.neighborhood || ''
+    try{
+      await updateDoc(doc(db,'deliveries', id), {
+        status:'pending', assignedVolunteerId:null, updatedAt: serverTimestamp()
+      })
+      await setDoc(doc(db,'pending_index', id), {
+        neighborhood: nb, createdAt: serverTimestamp()
+      }, { merge:true })
+    }catch(e){
+      console.error('releaseAssignment failed', e)
+      alert('שגיאה בשחרור: '+(e?.message||e))
+    }
 
   if (!user || user.isAnonymous) return null
 
