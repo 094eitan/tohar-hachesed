@@ -369,7 +369,7 @@ export default function Admin() {
         <h2 className="text-xl font-semibold">אדמין — ניהול משלוחים</h2>
         {/* ← חדש: קיצור לעמוד ניהול מתנדבים */}
         <button className="btn btn-outline" onClick={()=>nav('/admin/volunteers')}>ניהול מתנדבים</button>
-		<button className="btn" onClick={()=>nav('/admin/edits')}>בקשות תיקון</button>
+		<button className="btn btn-outline" onClick={()=>nav('/admin/edits')}>בקשות תיקון</button>
       </div>
 
       {/* ספירות */}
