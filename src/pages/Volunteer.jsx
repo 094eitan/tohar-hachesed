@@ -206,7 +206,7 @@ export default function Volunteer() {
       await updateDoc(doc(db,'deliveries', id), {
         status:'delivered', assignedVolunteerId:null, updatedAt: serverTimestamp()
       })
-      await setDoc(doc(db,'pending_index', id), {
+      await setDoc(doc(db,'delivered', id), {
         neighborhood: nb, createdAt: serverTimestamp()
       }, { merge:true })
     }catch(e){
