@@ -9,6 +9,8 @@ import * as XLSX from 'xlsx'
 import { useNavigate } from 'react-router-dom' // ← חדש: לנווט לעמוד ניהול מתנדבים
 import WazeLink from '../components/WazeLink';
 
+// פונקציה לבניית מחרוזת כתובת עבור Waze:
+// "רחוב ומספר, עיר, ישראל"
 function addrString(a)
 {
   if (!a)
@@ -18,23 +20,33 @@ function addrString(a)
 
   const parts = [];
 
-  if (a.street)
+  // חשוב: שהשדה street יכיל "רחוב + מספר בית".
+  // אם יש לך שדה houseNumber בנפרד, חבר אותו כאן.
+  if (a.street && a.street.trim().length > 0)
   {
-    parts.push(a.street);
+    let street = a.street.trim();
+
+    // אם יש לך a.houseNumber - בטא:
+    if (a.houseNumber && String(a.houseNumber).trim().length > 0)
+    {
+      street = `${street} ${String(a.houseNumber).trim()}`;
+    }
+
+    parts.push(street);
   }
 
-  if (a.city)
+  if (a.city && a.city.trim().length > 0)
   {
-    parts.push(a.city);
+    parts.push(a.city.trim());
   }
 
-  if (a.apartment)
-  {
-    parts.push(`דירה ${a.apartment}`);
-  }
+  // מדינה מוסיפה דיוק ומונעת תוצאות "בסביבה שלך"
+  parts.push('ישראל');
 
+  // שים לב: לא מכניסים דירה/כניסה/קומה/קוד דלת לשאילתה של החיפוש
   return parts.filter(Boolean).join(', ');
 }
+
 
 /* ---------- הרשאת אדמין ---------- */
 async function isAdmin() {
