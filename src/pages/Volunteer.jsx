@@ -198,6 +198,7 @@ export default function Volunteer() {
   */
   
     // סיום משימה (אחרי "נמסרה") – נשאר Delivered אבל נעלם מהרשימה
+  async function completeAfterDelivered(id) {
   if (!confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')) return
     const item = my.find(x=>x.id===id)
     const nb = item?.address?.neighborhood || ''
@@ -212,6 +213,7 @@ export default function Volunteer() {
       console.error('releaseAssignment failed', e)
       alert('שגיאה בשחרור: '+(e?.message||e))
     }
+  }
 
   if (!user || user.isAnonymous) return null
 
