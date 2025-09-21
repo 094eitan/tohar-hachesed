@@ -6,6 +6,9 @@ import AdminVolunteers from './pages/AdminVolunteers'
 import Volunteer from './pages/Volunteer'
 import VolunteerStats from './pages/VolunteerStats'
 import { auth } from './lib/firebase'
+import AdminEditRequests from './pages/AdminEditRequests.jsx'
+
+
 
 function NavBar() {
   const [user, setUser] = useState(auth.currentUser)
@@ -52,6 +55,7 @@ export default function App() {
 		<Route path="/admin/volunteers" element={<AdminVolunteers/>} />
 		<Route path="/volunteer" element={<Volunteer/>} />
 		<Route path="/volunteer/stats" element={<VolunteerStats/>} />
+		<Route path="/admin/edits" element={<AdminEditRequests />} />
         {/* 404 */}
         <Route path="*" element={
           <div dir="rtl" className="p-10 text-center">
