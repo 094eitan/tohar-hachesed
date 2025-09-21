@@ -7,45 +7,115 @@ import {
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { useNavigate } from 'react-router-dom' // ← חדש: לנווט לעמוד ניהול מתנדבים
-import WazeLink from '../components/WazeLink';
+import WazeLink from '../components/WazeLink'
 
-// פונקציה לבניית מחרוזת כתובת עבור Waze:
-// "רחוב ומספר, עיר, ישראל"
-function addrString(a)
+
+/* ---------- עזר ל-Waze ול-GEOCODE ---------- */
+
+// בונה מחרוזת כתובת ידידותית ל-Waze במידת הצורך (fallback)
+function addrStringForWaze(a)
 {
   if (!a)
   {
     return '';
   }
-
   const parts = [];
-
-  // חשוב: שהשדה street יכיל "רחוב + מספר בית".
-  // אם יש לך שדה houseNumber בנפרד, חבר אותו כאן.
   if (a.street && a.street.trim().length > 0)
   {
-    let street = a.street.trim();
-
-    // אם יש לך a.houseNumber - בטא:
+    // אם יש houseNumber בנפרד, נכניס אותו כאן
     if (a.houseNumber && String(a.houseNumber).trim().length > 0)
     {
-      street = `${street} ${String(a.houseNumber).trim()}`;
+      parts.push(`${a.street.trim()} ${String(a.houseNumber).trim()}`);
     }
-
-    parts.push(street);
+    else
+    {
+      parts.push(a.street.trim());
+    }
   }
-
   if (a.city && a.city.trim().length > 0)
   {
     parts.push(a.city.trim());
   }
-
-  // מדינה מוסיפה דיוק ומונעת תוצאות "בסביבה שלך"
   parts.push('ישראל');
-
-  // שים לב: לא מכניסים דירה/כניסה/קומה/קוד דלת לשאילתה של החיפוש
   return parts.filter(Boolean).join(', ');
 }
+
+// נירמול כתובת לשאילתת גיאוקוד
+function normalizeAddressForGeocode(address)
+{
+  if (!address) return '';
+  const parts = [];
+  if (address.street && address.street.trim().length > 0)
+  {
+    if (address.houseNumber && String(address.houseNumber).trim().length > 0)
+    {
+      parts.push(`${address.street.trim()} ${String(address.houseNumber).trim()}`);
+    }
+    else
+    {
+      parts.push(address.street.trim());
+    }
+  }
+  if (address.city && address.city.trim().length > 0)
+  {
+    parts.push(address.city.trim());
+  }
+  parts.push('ישראל');
+  return parts.filter(Boolean).join(', ');
+}
+
+// קריאת Geocoding חינמית (Nominatim/OpenStreetMap)
+// הערה: לשימוש הוגן. שמרו תוצאות במסמך כדי להימנע מקריאות חוזרות.
+async function geocodeAddress(address)
+{
+  const q = normalizeAddressForGeocode(address);
+  if (!q || q.split(',').length < 2)
+  {
+    return null;
+  }
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=0&q=${encodeURIComponent(q)}`;
+  const res = await fetch(url,
+  {
+    headers:
+    {
+      "Accept-Language": "he"
+    }
+  });
+  if (!res.ok)
+  {
+    throw new Error(`Nominatim HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  if (Array.isArray(data) && data.length > 0)
+  {
+    const { lat, lon } = data[0];
+    return { lat: parseFloat(lat), lng: parseFloat(lon) };
+  }
+  return null;
+}
+
+// מבצע גיאוקוד ושומר lat/lng למסמך המשלוח
+async function geocodeAndSaveDelivery(id, address)
+{
+  try
+  {
+    const coords = await geocodeAddress(address);
+    if (coords)
+    {
+      await updateDoc(doc(db,'deliveries',id),
+      {
+        lat: coords.lat,
+        lng: coords.lng,
+        geocodedAt: serverTimestamp()
+      });
+    }
+  }
+  catch (e)
+  {
+    console.error('geocode failed', e);
+  }
+}
+
 
 
 /* ---------- הרשאת אדמין ---------- */
@@ -203,6 +273,31 @@ export default function Admin() {
     }
     await ensurePendingIndex(ref.id, address.neighborhood || '')
   }
+
+
+		// מריץ גיאוקוד על כל המשלוחים שחסר להם lat/lng (Fair-Use)
+	async function geocodeMissing()
+	{
+	  const snap = await getDocs(collection(db, 'deliveries'));
+	  let count = 0;
+
+	  for (const docSnap of snap.docs)
+	  {
+		const d = docSnap.data();
+
+		// חסר קואורדינטות?
+		if (typeof d.lat !== 'number' || typeof d.lng !== 'number')
+		{
+		  await geocodeAndSaveDelivery(docSnap.id, d.address);
+		  count++;
+
+		  // שמירה על קצב מנומס מול Nominatim (≈ בקשה לשנייה)
+		  await new Promise(r => setTimeout(r, 1100));
+		}
+	  }
+
+	  alert(`הושלם. גיאוקדנו ${count} משלוחים חסרים.`);
+	}
 
   async function importFile(file){
     setMsg('מייבא…'); setImportErrors([])
@@ -430,6 +525,10 @@ export default function Admin() {
         <button className="btn btn-outline" onClick={syncNeighborhoodsFromDeliveries}>סנכרן שכונות</button>
         <button className="btn btn-outline" onClick={rebuildPendingIndex}>שחזר אינדקס ממתינים</button>
         <button className="btn btn-outline btn-error" onClick={deleteAll}>מחק הכל</button>
+		<button className="btn btn-sm btn-primary" onClick={geocodeMissing}>
+		גיאוקוד לרשומות חסרות
+		</button>
+
       </div>
 
       {/* ניהול שכונות */}
@@ -546,8 +645,7 @@ export default function Admin() {
                 </td>
 
                 <td className="flex flex-wrap gap-1">
-				<WazeLink address={addrString(r.address)} label={"וויז"} className={"btn btn-xs"} title={"פתח ניווט ב-Waze"} />
-
+                  <WazeLink lat={r.lat} lng={r.lng} address={addrStringForWaze(r.address)} label={"וויז"} className={"btn btn-primary btn-xs"} title={"פתח ניווט ב-Waze"} />
                   <div className="join">
                     <button className="btn btn-xs join-item btn-warning" onClick={()=>updateStatus(r.id,'pending')}>ממתין</button>
                     <button className="btn btn-xs join-item" onClick={()=>updateStatus(r.id,'in_transit')}>בדרך</button>
@@ -583,7 +681,12 @@ function EditableCell({ value:initial, onSave, textarea=false }){
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState(initial||'')
   useEffect(()=>{ setVal(initial||'') },[initial])
-  const commit = async ()=>{ setEditing(false); const v=(val||'').trim(); if(v===(initial||'')) return; await onSave(v) }
+  const commit = async ()=>{ setEditing(false);
+    // אם רחוב/עיר/מספר בית השתנו — מבצעים גיאוקוד ושמירה של lat/lng
+    if (key==='street' || key==='city' || key==='houseNumber')
+    {
+      await geocodeAndSaveDelivery(id, address);
+    } const v=(val||'').trim(); if(v===(initial||'')) return; await onSave(v) }
   if(!editing){
     return <div onDoubleClick={()=>setEditing(true)} className="min-h-[32px] cursor-text">{initial ? <span>{initial}</span> : <span className="opacity-40">—</span>}</div>
   }

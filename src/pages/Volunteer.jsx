@@ -7,47 +7,20 @@ import {
   updateDoc, where, deleteDoc, limit, setDoc
 } from 'firebase/firestore'
 
-import WazeLink from '../components/WazeLink';
+import WazeLink from '../components/WazeLink'
+// ← חדש
 import RequestEditModal from '../components/RequestEditModal'
 
-// פונקציה לבניית מחרוזת כתובת עבור Waze:
-// "רחוב ומספר, עיר, ישראל"
+// מחרוזת כתובת fallback ל-Waze (כשאין עדיין lat/lng)
 function addrString(a)
 {
-  if (!a)
-  {
-    return '';
-  }
-
+  if (!a) { return ''; }
   const parts = [];
-
-  // חשוב: שהשדה street יכיל "רחוב + מספר בית".
-  // אם יש לך שדה houseNumber בנפרד, חבר אותו כאן.
-  if (a.street && a.street.trim().length > 0)
-  {
-    let street = a.street.trim();
-
-    // אם יש לך a.houseNumber - בטא:
-    if (a.houseNumber && String(a.houseNumber).trim().length > 0)
-    {
-      street = `${street} ${String(a.houseNumber).trim()}`;
-    }
-
-    parts.push(street);
-  }
-
-  if (a.city && a.city.trim().length > 0)
-  {
-    parts.push(a.city.trim());
-  }
-
-  // מדינה מוסיפה דיוק ומונעת תוצאות "בסביבה שלך"
+  if (a.street) { parts.push(a.street); }
+  if (a.city)   { parts.push(a.city); }
   parts.push('ישראל');
-
-  // שים לב: לא מכניסים דירה/כניסה/קומה/קוד דלת לשאילתה של החיפוש
   return parts.filter(Boolean).join(', ');
 }
-
 
 
 export default function Volunteer() {
@@ -317,7 +290,7 @@ export default function Volunteer() {
                     <td className="max-w-[260px] truncate" title={d.notes || ''}>{d.notes || '—'}</td>
                     <td><StatusBadge status={d.status}/></td>
                     <td className="flex flex-wrap gap-1">
-					<WazeLink address={addrString(d.address)} label={"וויז"} className={"btn btn-xs"} title={"פתח ניווט ב-Waze"} />
+                      <WazeLink lat={d.lat} lng={d.lng} address={addrString(d.address)} label={"וויז"} className={"btn btn-primary btn-xs"} title={"פתח ניווט ב-Waze"} />
                       <div className="join">
                         <button className="btn btn-xs join-item" onClick={()=>setStatus(d.id,'in_transit')}>בדרך</button>
                         <button className="btn btn-xs join-item btn-success" onClick={()=>setStatus(d.id,'delivered')}>נמסרה</button>

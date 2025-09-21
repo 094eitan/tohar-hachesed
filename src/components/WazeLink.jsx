@@ -14,9 +14,9 @@ import React from "react";
   - title (מחרוזת)    -> אופציונלי: tooltip
 
   עדיפות:
-  1) אם יש lat/lng -> ul?ll=LAT,LNG&navigate=yes
-  2) אחרת אם יש address -> ul?q=ADDRESS&navigate=yes
-  3) אם אין כלום -> לא מציג לינק
+  1) אם יש lat/lng -> ul?ll=LAT,LNG&navigate=yes (מדויק, בלי חיפוש)
+  2) אחרת אם יש address -> ul?q=ADDRESS&navigate=yes (חיפוש)
+  3) אם אין -> לא מציג לינק
 */
 
 function buildWazeUrl(lat, lng, address)
