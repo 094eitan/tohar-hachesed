@@ -7,6 +7,9 @@ import {
   updateDoc, where, deleteDoc, limit, setDoc
 } from 'firebase/firestore'
 
+// ← חדש
+import RequestEditModal from '../components/RequestEditModal'
+
 export default function Volunteer() {
   const nav = useNavigate()
 
@@ -179,7 +182,7 @@ export default function Volunteer() {
     if (!ok) return
     try{
       await updateDoc(doc(db,'deliveries', id), {
-        volunteerCompleted: true,      // ← רק הדגל
+        volunteerCompleted: true,
         updatedAt: serverTimestamp()
       })
     }catch(e){
@@ -187,6 +190,12 @@ export default function Volunteer() {
       alert('שגיאה בסימון סיום משימה: '+(e?.message||e))
     }
   }
+
+  // ===== חדש: מצב/מודאל בקשת תיקון =====
+  const [editOpen, setEditOpen] = useState(false)
+  const [editDeliveryId, setEditDeliveryId] = useState(null)
+  const openEdit = (id) => { setEditDeliveryId(id); setEditOpen(true) }
+  const closeEdit = () => { setEditOpen(false); setEditDeliveryId(null) }
 
   if (!user || user.isAnonymous) return null
 
@@ -207,7 +216,8 @@ export default function Volunteer() {
           <li>בחר/י שכונה וכמה משלוחים לקבל כרגע.</li>
           <li>לחץ/י <b>📦 קבל שיבוץ</b>.</li>
           <li>עדכן/י סטטוס: <em>בדרך</em> / <em>נמסרה</em> / <em>חזרה</em>, או <b>שחרר</b>.</li>
-          <li>אחרי <b>נמסרה</b> — יופיע <b>סיים משימה</b> שמעלים את השורה מהרשימה (באדמין זה נשאר Delivered).</li>
+          <li>אחרי <b>נמסרה</b> — יופיע <b>סיים משימה</b> שמעלים את השורה מהרשימה.</li>
+          <li>טעות בפרטים? השתמש/י ב־<b>הצע תיקון</b> — זה ישלח לאדמין לבקרה.</li>
         </ol>
       </div>
 
@@ -275,6 +285,8 @@ export default function Volunteer() {
                       {d.status==='delivered' && (
                         <button className="btn btn-xs btn-outline" onClick={()=>completeAfterDelivered(d.id)}>סיים משימה</button>
                       )}
+                      {/* ← חדש: בקשת תיקון */}
+                      <button className="btn btn-xs btn-warning" onClick={()=>openEdit(d.id)}>הצע תיקון</button>
                     </td>
                   </tr>
                 ))}
@@ -286,6 +298,14 @@ export default function Volunteer() {
           </div>
         )}
       </div>
+
+      {/* מודאל בקשת תיקון */}
+      <RequestEditModal
+        open={editOpen}
+        onClose={closeEdit}
+        deliveryId={editDeliveryId}
+        currentUserUid={user?.uid}
+      />
     </div>
   )
 }
