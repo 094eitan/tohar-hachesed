@@ -207,7 +207,7 @@ export default function Volunteer() {
         status:'delivered', assignedVolunteerId:null, updatedAt: serverTimestamp()
       })
       await setDoc(doc(db,'delivered', id), {
-        neighborhood: nb, createdAt: serverTimestamp()
+        volunteerCompletedAt: serverTimestamp()
       }, { merge:true })
     }catch(e){
       console.error('releaseAssignment failed', e)
