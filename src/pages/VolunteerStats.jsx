@@ -9,7 +9,6 @@ import {
 import { getCountFromServer } from 'firebase/firestore'
 
 // 🆕 כפתור מצב כהה/בהיר
-import ThemeToggle from '../components/ThemeToggle'
 
 function startOfDay(d=new Date())
 {
