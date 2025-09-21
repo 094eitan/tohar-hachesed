@@ -16,7 +16,7 @@ export default function Volunteer() {
     const un = auth.onAuthStateChanged(async u => {
       setUser(u)
       if (!u || u.isAnonymous) { nav('/'); return }
-      // רישום/עדכון פרופיל מתנדב + heartbeat ראשוני
+      // פרופיל מתנדב + heartbeat ראשוני
       await setDoc(doc(db,'volunteers', u.uid), {
         displayName: u.displayName || (u.email ? u.email.split('@')[0] : 'מתנדב'),
         email: u.email || null,
@@ -71,45 +71,34 @@ export default function Volunteer() {
   const [wantedCount, setWantedCount] = useState(1)
   const [msg, setMsg] = useState('')
 
-  // ===================== המשלוחים שלי (שאילתות כפולות + מיזוג) =====================
+  // ===================== המשלוחים שלי (שאילתה עם דגל השלמה) =====================
   const [my, setMy] = useState([])
   const [myErr, setMyErr] = useState('')
 
   useEffect(() => {
     if (!user) return
-
-    const qAssigned = query(
+    // מציג רק משלוחים ששויכו אליי ושלא הושלמו
+    const qMine = query(
       collection(db,'deliveries'),
-      where('assignedVolunteerId','==', user.uid)
-    )
-    const qDeliveredNotCompleted = query(
-      collection(db,'deliveries'),
-      where('deliveredBy','==', user.uid),
-      where('volunteerCompletedAt','==', null)
+      where('assignedVolunteerId','==', user.uid),
+      where('volunteerCompleted','==', false)
     )
 
-    let a=[], b=[]
-    const mergeAndSet = () => {
-      const byId = new Map()
-      ;[...a, ...b].forEach(r => byId.set(r.id, r))
-      const list = [...byId.values()].sort((x,y)=>{
+    const un = onSnapshot(qMine, snap => {
+      const arr=[]; snap.forEach(d=>arr.push({id:d.id, ...d.data()}))
+      arr.sort((x,y)=>{
         const tx = (x.updatedAt?.seconds||x.createdAt?.seconds||0)
         const ty = (y.updatedAt?.seconds||y.createdAt?.seconds||0)
         return ty - tx
       })
-      setMy(list)
-    }
-
-    const un1 = onSnapshot(qAssigned, snap => {
-      a=[]; snap.forEach(d=>a.push({id:d.id, ...d.data()})); mergeAndSet()
+      setMy(arr)
       setMyErr('')
-    }, err => setMyErr('שגיאה/הרשאה בשאילתת assigned'))
-    const un2 = onSnapshot(qDeliveredNotCompleted, snap => {
-      b=[]; snap.forEach(d=>b.push({id:d.id, ...d.data()})); mergeAndSet()
-      setMyErr('')
-    }, err => setMyErr('שגיאה/הרשאה בשאילתת deliveredBy'))
+    }, err => {
+      console.error('deliveries snapshot error', err)
+      setMyErr('אין הרשאה/נתונים להצגה')
+    })
 
-    return () => { un1(); un2() }
+    return () => un()
   }, [user])
   // ================================================================================
 
@@ -136,7 +125,8 @@ export default function Volunteer() {
         await updateDoc(doc(db,'deliveries', id), {
           assignedVolunteerId: user.uid,
           status: 'assigned',
-          updatedAt: serverTimestamp()
+          updatedAt: serverTimestamp(),
+          volunteerCompleted: false   // ← דגל התחלה
         })
         await deleteDoc(doc(db,'pending_index', id)).catch(()=>{})
         ok++
@@ -145,34 +135,34 @@ export default function Volunteer() {
     setMsg(ok ? `שובצו ${ok} משלוחים` : 'לא הצלחתי לשבץ, נסה שוב בעוד רגע')
   }
 
-	async function setStatus(id, status) {
-	  try {
-		const patch = {
-		  status,
-		  updatedAt: serverTimestamp(),
-		  assignedVolunteerId: auth.currentUser?.uid || null // שומר שיוך !
-		}
-		if (status === 'delivered') {
-		  patch.deliveredBy = auth.currentUser?.uid || null
-		  patch.deliveredAt = serverTimestamp()
-		}
-		await updateDoc(doc(db,'deliveries', id), patch)
-	  } catch (e) {
-		console.error('setStatus failed', e)
-		alert('שגיאה בעדכון סטטוס: ' + (e?.message || e))
-	  }
-	}
-
-
-	  // שחרור שיבוץ (מחזיר ל-pending ויוצר אינדקס כדי שהמונה יתעדכן)
   // שינוי סטטוס — משמרים שיוך; ב-"נמסרה" כותבים גם deliveredBy/deliveredAt
+  async function setStatus(id, status) {
+    try{
+      const patch = {
+        status,
+        updatedAt: serverTimestamp(),
+        assignedVolunteerId: auth.currentUser?.uid || null
+      }
+      if (status === 'delivered') {
+        patch.deliveredBy = auth.currentUser?.uid || null
+        patch.deliveredAt = serverTimestamp()
+      }
+      await updateDoc(doc(db,'deliveries', id), patch)
+    }catch(e){
+      console.error('setStatus failed', e)
+      alert('שגיאה בעדכון סטטוס: '+(e?.message||e))
+    }
+  }
+
+  // שחרור שיבוץ (מחזיר ל-pending ויוצר אינדקס כדי שהמונה יתעדכן)
   async function releaseAssignment(id) {
     if (!confirm('לשחרר את המשלוח הזה מהשיבוץ שלך?')) return
     const item = my.find(x=>x.id===id)
     const nb = item?.address?.neighborhood || ''
     try{
       await updateDoc(doc(db,'deliveries', id), {
-        status:'pending', assignedVolunteerId:null, updatedAt: serverTimestamp()
+        status:'pending', assignedVolunteerId:null, updatedAt: serverTimestamp(),
+        volunteerCompleted: false
       })
       await setDoc(doc(db,'pending_index', id), {
         neighborhood: nb, createdAt: serverTimestamp()
@@ -183,36 +173,20 @@ export default function Volunteer() {
     }
   }
 
-/*
-  // סיום משימה (אחרי "נמסרה") – נשאר Delivered אבל נעלם מהרשימה
+  // סיום משימה (אחרי "נמסרה") – נשאר Delivered באדמין, נעלם מהרשימה כאן
   async function completeAfterDelivered(id) {
     const ok = confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')
     if (!ok) return
     try{
-      await updateDoc(doc(db,'deliveries', id), { volunteerCompletedAt: serverTimestamp() })
+      await updateDoc(doc(db,'deliveries', id), {
+        volunteerCompleted: true,      // ← רק הדגל
+        updatedAt: serverTimestamp()
+      })
     }catch(e){
       console.error('completeAfterDelivered failed', e)
       alert('שגיאה בסימון סיום משימה: '+(e?.message||e))
     }
   }
-  */
-  
-    // סיום משימה (אחרי "נמסרה") – נשאר Delivered אבל נעלם מהרשימה
-  async function completeAfterDelivered(id) {
-  if (!confirm('לסמן שהמשימה הסתיימה ולהעלים אותה מהרשימה? (הסטטוס יישאר "נמסרה")')) return
-  try {
-    await updateDoc(doc(db, 'deliveries', id), {
-      volunteerCompletedAt: serverTimestamp(),   // סימון סיום משימה
-      updatedAt: serverTimestamp()               // שמירת עדכון אחרון
-      // שים לב: לא נוגעים ב-assignedVolunteerId!
-      // לא כותבים כלום לאוסף אחר!
-    })
-  } catch (e) {
-    console.error('completeAfterDelivered failed', e)
-    alert('שגיאה בסימון סיום משימה: ' + (e?.message || e))
-  }
-}
-
 
   if (!user || user.isAnonymous) return null
 
@@ -307,7 +281,7 @@ export default function Volunteer() {
               </tbody>
             </table>
             <div className="mt-3 text-sm opacity-80">
-              סה״כ שובצו לך: <b>{my.length}</b> משלוחים (מסתיר רק פריטים שסומנו "סיים משימה").
+              סה״כ שובצו לך: <b>{my.length}</b> משלוחים (מסתיר כל משלוח שסומן "סיים משימה").
             </div>
           </div>
         )}
