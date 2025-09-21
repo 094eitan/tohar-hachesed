@@ -129,10 +129,12 @@ export default function Landing() {
           }
         </div>
 
-        <div className="mt-3">
-          <button onClick={doAnon} className="btn w-full">כניסה אנונימית</button>
-        </div>
-
+/*
+      <div className="mt-3">
+        <button onClick={doAnon} className="btn w-full">כניסה אנונימית</button>
+      </div>
+	  כניסה אנונימית היה בשביל הטסטים והורדתי את זה 
+*/
         {msg && <div className="alert alert-error mt-3"><span>{msg}</span></div>}
       </section>
     </div>
