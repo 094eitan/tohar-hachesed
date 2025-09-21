@@ -7,6 +7,34 @@ import {
 } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { useNavigate } from 'react-router-dom' // ← חדש: לנווט לעמוד ניהול מתנדבים
+import WazeLink from '../components/WazeLink';
+
+function addrString(a)
+{
+  if (!a)
+  {
+    return '';
+  }
+
+  const parts = [];
+
+  if (a.street)
+  {
+    parts.push(a.street);
+  }
+
+  if (a.city)
+  {
+    parts.push(a.city);
+  }
+
+  if (a.apartment)
+  {
+    parts.push(`דירה ${a.apartment}`);
+  }
+
+  return parts.filter(Boolean).join(', ');
+}
 
 /* ---------- הרשאת אדמין ---------- */
 async function isAdmin() {
@@ -506,6 +534,8 @@ export default function Admin() {
                 </td>
 
                 <td className="flex flex-wrap gap-1">
+				<WazeLink address={addrString(r.address)} label={"וויז"} className={"btn btn-xs"} title={"פתח ניווט ב-Waze"} />
+
                   <div className="join">
                     <button className="btn btn-xs join-item btn-warning" onClick={()=>updateStatus(r.id,'pending')}>ממתין</button>
                     <button className="btn btn-xs join-item" onClick={()=>updateStatus(r.id,'in_transit')}>בדרך</button>

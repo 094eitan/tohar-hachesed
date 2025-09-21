@@ -7,8 +7,38 @@ import {
   updateDoc, where, deleteDoc, limit, setDoc
 } from 'firebase/firestore'
 
-// ← חדש
+import WazeLink from '../components/WazeLink';
 import RequestEditModal from '../components/RequestEditModal'
+
+function addrString(a)
+{
+  if (!a)
+  {
+    return '';
+  }
+
+  // מרכיבים כתובת קריאה: "רחוב ומספר, עיר, דירה X" (אם יש)
+  const parts = [];
+
+  if (a.street)
+  {
+    parts.push(a.street); // כדאי לשמור אצלכם "רחוב ומספר" בשדה street
+  }
+
+  if (a.city)
+  {
+    parts.push(a.city);
+  }
+
+  if (a.apartment)
+  {
+    parts.push(`דירה ${a.apartment}`);
+  }
+
+  return parts.filter(Boolean).join(', ');
+}
+
+
 export default function Volunteer() {
   const nav = useNavigate()
 
@@ -276,6 +306,7 @@ export default function Volunteer() {
                     <td className="max-w-[260px] truncate" title={d.notes || ''}>{d.notes || '—'}</td>
                     <td><StatusBadge status={d.status}/></td>
                     <td className="flex flex-wrap gap-1">
+					<WazeLink address={addrString(d.address)} label={"וויז"} className={"btn btn-xs"} title={"פתח ניווט ב-Waze"} />
                       <div className="join">
                         <button className="btn btn-xs join-item" onClick={()=>setStatus(d.id,'in_transit')}>בדרך</button>
                         <button className="btn btn-xs join-item btn-success" onClick={()=>setStatus(d.id,'delivered')}>נמסרה</button>
