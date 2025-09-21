@@ -235,12 +235,12 @@ export default function VolunteerStats()
       {/* 🆕 היסטוריית משלוחים */}
       <div className="mt-6 p-4 rounded-xl border bg-base-100">
         <div className="flex items-end justify-between gap-3 mb-3">
-          <div className="font-semibold">היסטוריית משלוחים (עד 100 אחרונים)</div>
+          <div className="font-semibold">היסטוריית משלוחים</div>
           <div className="w-72">
             <label className="label"><span className="label-text">חיפוש לפי שם / עיר / רחוב / טלפון / הערות</span></label>
             <input
               className="input input-bordered w-full"
-              placeholder="לדוגמה: פרדס חנה"
+              placeholder="לדוגמה: לוטם"
               value={qText}
               onChange={e=>setQText(e.target.value)}
             />
