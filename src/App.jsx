@@ -1,83 +1,66 @@
-import React, { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom'
-import Login from './pages/Login'
-import Admin from './pages/Admin'
-import AdminVolunteers from './pages/AdminVolunteers'
-import Volunteer from './pages/Volunteer'
-import VolunteerStats from './pages/VolunteerStats'
-import { auth } from './lib/firebase'
-import AdminEditRequests from './pages/AdminEditRequests.jsx'
-import ThemeToggle from './components/ThemeToggle'  // ✅ נתיב נכון
+// src/App.jsx
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, NavLink } from "react-router-dom";
 
-function NavBar()
-{
-  const [user, setUser] = useState(auth.currentUser)
-  const nav = useNavigate()
+import Login from "./Login";
+import Volunteer from "./Volunteer";
+import VolunteerStats from "./VolunteerStats";
+import Admin from "./Admin";
+import AdminVolunteers from "./AdminVolunteers";
+import AdminEditRequests from "./AdminEditRequests";
 
-  useEffect(() =>
-  {
-    const un = auth.onAuthStateChanged(setUser)
-    return () => un()
-  }, [])
+import ThemeToggle from "./ThemeToggle";
+import GradientWaves from "./components/GradientWaves"; // 👈 הרקע הקבוע
 
-  async function doLogout()
-  {
-    const { signOut } = await import('firebase/auth')
-    await signOut(auth)
-    nav('/') // חזרה לדף הכניסה
-  }
-
+export default function App() {
   return (
-    <nav className="navbar bg-base-100 border-b">
-      <div className="flex-1">
-        <Link className="btn btn-ghost text-xl" to="/">טוהר החסד</Link>
-      </div>
+    <Router>
+      {/* רקע הגלים: קבוע לכל המסך, לא זז בגלילה */}
+      <GradientWaves
+        className="fixed inset-0 w-screen h-screen -z-10"
+        lines={20}
+        amplitudeX={100}
+        amplitudeY={20}
+        hueStart={53}
+        satStart={74}
+        lightStart={67}
+        hueEnd={216}
+        satEnd={100}
+        lightEnd={7}
+        smoothness={3}
+        offsetX={10}
+        fill={true}
+        crazyness={false}
+      />
 
-      <div className="flex gap-2 items-center">
-        {/* תמיד נראה את מתג הנושא בפינה הימנית */}
-        <ThemeToggle />
-
-        {/* קישורים כלליים */}
-        <Link className="btn btn-ghost" to="/">כניסה</Link>
-        <Link className="btn btn-ghost" to="/volunteer">מתנדב</Link>
-        <Link className="btn btn-ghost" to="/admin">אדמין</Link>
-
-        {/* כפתור התנתקות רק למשתמש מחובר */}
-        {user && (
-          <button className="btn btn-outline" onClick={doLogout}>
-            התנתק
-          </button>
-        )}
-      </div>
-    </nav>
-  )
-}
-
-export default function App()
-{
-  return (
-    <BrowserRouter>
-      <NavBar />
-      <Routes>
-        {/* דף הבית = כניסה */}
-        <Route path="/" element={<Login />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/admin/volunteers" element={<AdminVolunteers />} />
-        <Route path="/admin/edits" element={<AdminEditRequests />} />
-        <Route path="/volunteer" element={<Volunteer />} />
-        <Route path="/volunteer/stats" element={<VolunteerStats />} />
-
-        {/* 404 */}
-        <Route
-          path="*"
-          element={
-            <div dir="rtl" className="p-10 text-center">
-              <h2 className="text-2xl">הדף לא נמצא</h2>
-              <Link className="btn mt-4" to="/">חזרה לדף הבית</Link>
+      {/* מעטפת כל התוכן מעל הרקע */}
+      <div className="relative z-10 min-h-screen">
+        {/* Nav קטן (אופציונלי) */}
+        <header className="sticky top-0 z-20 bg-base-300/60 backdrop-blur border-b border-base-200">
+          <nav className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-4">
+            <div className="flex-1 font-extrabold text-lg">טוהר החסד</div>
+            <div className="flex items-center gap-3">
+              <NavLink className="btn btn-ghost btn-sm" to="/">דף הבית</NavLink>
+              <NavLink className="btn btn-ghost btn-sm" to="/volunteer">מתנדב</NavLink>
+              <NavLink className="btn btn-ghost btn-sm" to="/volunteer/stats">סיכומים ויעדים</NavLink>
+              <NavLink className="btn btn-ghost btn-sm" to="/admin">אדמין</NavLink>
+              <ThemeToggle />
             </div>
-          }
-        />
-      </Routes>
-    </BrowserRouter>
-  )
+          </nav>
+        </header>
+
+        {/* התוכן הפר-דף */}
+        <main className="max-w-6xl mx-auto p-6">
+          <Routes>
+            <Route path="/" element={<Login />} />
+            <Route path="/volunteer" element={<Volunteer />} />
+            <Route path="/volunteer/stats" element={<VolunteerStats />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/admin/volunteers" element={<AdminVolunteers />} />
+            <Route path="/admin/edits" element={<AdminEditRequests />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
+  );
 }
