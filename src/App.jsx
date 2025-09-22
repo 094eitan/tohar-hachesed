@@ -51,7 +51,7 @@ export default function App() {
     <BrowserRouter>
       {/* 🔵 רקע הגלים — קבוע, מכסה תמיד 100vh/100vw, ולא זז בגלילה */}
       <GradientWaves
-        className="fixed inset-0 w-screen h-screen -z-10"
+        className="fixed inset-0 -z-10 w-screen h-[100dvh]"	
         lines={20}
         amplitudeX={100}
         amplitudeY={20}
