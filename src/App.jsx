@@ -1,21 +1,59 @@
 // src/App.jsx
-import React from "react";
-import { BrowserRouter as Router, Routes, Route, NavLink } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Link, useNavigate } from "react-router-dom";
 
-import Login from "./Login";
-import Volunteer from "./Volunteer";
-import VolunteerStats from "./VolunteerStats";
-import Admin from "./Admin";
-import AdminVolunteers from "./AdminVolunteers";
-import AdminEditRequests from "./AdminEditRequests";
+import Login from "./pages/Login";
+import Admin from "./pages/Admin";
+import AdminVolunteers from "./pages/AdminVolunteers";
+import Volunteer from "./pages/Volunteer";
+import VolunteerStats from "./pages/VolunteerStats";
+import AdminEditRequests from "./pages/AdminEditRequests.jsx";
 
-import ThemeToggle from "./ThemeToggle";
-import GradientWaves from "./components/GradientWaves"; // 👈 הרקע הקבוע
+import ThemeToggle from "./components/ThemeToggle";   // ✅ נתיב נכון
+import GradientWaves from "./components/GradientWaves"; // 👈 הרקע הקבוע לכל האפליקציה
+
+function NavBar() {
+  const [user, setUser] = useState(null);
+  const nav = useNavigate();
+
+  useEffect(() => {
+    const un = (await import("./lib/firebase")).auth.onAuthStateChanged(setUser);
+    return () => un();
+  }, []);
+
+  async function doLogout() {
+    const { auth } = await import("./lib/firebase");
+    const { signOut } = await import("firebase/auth");
+    await signOut(auth);
+    nav("/"); // חזרה לדף הכניסה
+  }
+
+  return (
+    // שקיפות קלה + blur כדי לראות את הרקע זז מתחת
+    <nav className="navbar bg-base-100/60 backdrop-blur border-b sticky top-0 z-20">
+      <div className="flex-1">
+        <Link className="btn btn-ghost text-xl" to="/">טוהר החסד</Link>
+      </div>
+
+      <div className="flex gap-2 items-center">
+        <ThemeToggle />
+        <Link className="btn btn-ghost" to="/">כניסה</Link>
+        <Link className="btn btn-ghost" to="/volunteer">מתנדב</Link>
+        <Link className="btn btn-ghost" to="/admin">אדמין</Link>
+        {user && (
+          <button className="btn btn-outline" onClick={doLogout}>
+            התנתק
+          </button>
+        )}
+      </div>
+    </nav>
+  );
+}
 
 export default function App() {
   return (
-    <Router>
-      {/* רקע הגלים: קבוע לכל המסך, לא זז בגלילה */}
+    <BrowserRouter>
+      {/* 🔵 רקע הגלים – קבוע לכל המסך, לא זז בגלילה */}
       <GradientWaves
         className="fixed inset-0 w-screen h-screen -z-10"
         lines={20}
@@ -33,34 +71,33 @@ export default function App() {
         crazyness={false}
       />
 
-      {/* מעטפת כל התוכן מעל הרקע */}
+      {/* כל האפליקציה מעל הרקע */}
       <div className="relative z-10 min-h-screen">
-        {/* Nav קטן (אופציונלי) */}
-        <header className="sticky top-0 z-20 bg-base-300/60 backdrop-blur border-b border-base-200">
-          <nav className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-4">
-            <div className="flex-1 font-extrabold text-lg">טוהר החסד</div>
-            <div className="flex items-center gap-3">
-              <NavLink className="btn btn-ghost btn-sm" to="/">דף הבית</NavLink>
-              <NavLink className="btn btn-ghost btn-sm" to="/volunteer">מתנדב</NavLink>
-              <NavLink className="btn btn-ghost btn-sm" to="/volunteer/stats">סיכומים ויעדים</NavLink>
-              <NavLink className="btn btn-ghost btn-sm" to="/admin">אדמין</NavLink>
-              <ThemeToggle />
-            </div>
-          </nav>
-        </header>
+        <NavBar />
 
-        {/* התוכן הפר-דף */}
         <main className="max-w-6xl mx-auto p-6">
           <Routes>
+            {/* דף הבית = כניסה */}
             <Route path="/" element={<Login />} />
-            <Route path="/volunteer" element={<Volunteer />} />
-            <Route path="/volunteer/stats" element={<VolunteerStats />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/volunteers" element={<AdminVolunteers />} />
             <Route path="/admin/edits" element={<AdminEditRequests />} />
+            <Route path="/volunteer" element={<Volunteer />} />
+            <Route path="/volunteer/stats" element={<VolunteerStats />} />
+
+            {/* 404 */}
+            <Route
+              path="*"
+              element={
+                <div dir="rtl" className="p-10 text-center">
+                  <h2 className="text-2xl">הדף לא נמצא</h2>
+                  <Link className="btn mt-4" to="/">חזרה לדף הבית</Link>
+                </div>
+              }
+            />
           </Routes>
         </main>
       </div>
-    </Router>
+    </BrowserRouter>
   );
 }
