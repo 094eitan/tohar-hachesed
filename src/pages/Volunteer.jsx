@@ -213,7 +213,12 @@ export default function Volunteer() {
   if (!user || user.isAnonymous) return null
 
   return (
-    <div dir="rtl" className="max-w-6xl mx-auto p-6">
+    <div
+	  dir="rtl"
+	  className="
+		max-w-6xl mx-auto p-6
+		min-h-[85vh]
+		bg-gradient-to-b from-slate-900/20 via-slate-900/10 to-slate-900/0">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold">שלום {displayName} 👋</h2>
         <div className="flex gap-2">
@@ -224,43 +229,101 @@ export default function Volunteer() {
       </div>
 
       {/* הסבר קצר */}
-      <div className="mb-6 p-4 rounded-xl border bg-base-100">
-        <div className="font-semibold mb-2">איך זה עובד?</div>
-        <ol className="list-decimal pr-5 space-y-1 text-sm">
-          <li>בחר/י שכונה וכמה משלוחים לקבל כרגע.</li>
-          <li>לחץ/י <b>📦 קבל שיבוץ</b>.</li>
-          <li>עדכן/י סטטוס: <em>בדרך</em> / <em>נמסרה</em> / <em>חזרה</em>, או <b>שחרר</b>.</li>
-          <li>אחרי <b>נמסרה</b> — יופיע <b>סיים משימה</b> שמעלים את השורה מהרשימה.</li>
-          <li>טעות בפרטים? השתמש/י ב־<b>הצע תיקון</b> — זה ישלח לאדמין לבקרה.</li>
-        </ol>
-      </div>
+		<div className="
+		  mb-6 p-5 rounded-2xl border
+		  bg-white/10 dark:bg-white/10
+		  backdrop-blur-md
+		  border-white/20 shadow-xl
+		">
+		  <div className="flex items-center justify-between">
+			<h3 className="text-lg font-bold">איך זה עובד? ✨</h3>
+		  </div>
+
+		  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+			{/* עמודה 1: זרימת עבודה */}
+			<div className="space-y-2 text-sm leading-6">
+			  <div className="font-semibold opacity-90">זרימת שיבוץ ומשלוח</div>
+			  <ol className="list-decimal pr-5 space-y-1">
+				<li>בחר/י שכונה וכמות, ואז <b>📦 קבל שיבוץ</b>.</li>
+				<li>בכל שורה ניתן לעדכן סטטוס: <em>בדרך</em> / <em>נמסרה</em> / <em>חזרה</em>, או <b>שחרר</b>.</li>
+				<li>אחרי <b>נמסרה</b> יופיע <b>סיים משימה</b> — זה מסתיר אותה מהרשימה שלך.</li>
+				<li>ניווט? לחצו <b>״ניווט עם וויז״</b> — עובד עם <code>lat/lng</code> ואם אין אז עם כתובת.</li>
+			  </ol>
+			</div>
+
+			{/* עמודה 2: פיצ'רים שנוספו */}
+			<div className="space-y-2 text-sm leading-6">
+			  <div className="font-semibold opacity-90">מה חדש בדף?</div>
+			  <ul className="space-y-2">
+				<li>✅ <b>כפתור Waze כחול</b> (עדיפות ל־<code>lat/lng</code>, נפילה לכתובת).</li>
+				<li>✅ <b>סימון ״סיים משימה״</b> שמעלים משימות שסומנו נמסרה.</li>
+				<li>✅ <b>הצע תיקון</b> — מודאל שמייצר בקשה לאדמין ומשווה לפני/אחרי.</li>
+				<li>✅ <b>סטטיסטיקות ויעדים</b> (דף נפרד) כולל יעד יומי/שבועי/חודשי ולוח מובילים.</li>
+				<li>✅ <b>שכונות פעילות</b> ושיבוץ דרך אינדקס <code>pending_index</code>.</li>
+			  </ul>
+			</div>
+		  </div>
+		</div>
+
 
       {/* קליטת שיבוץ לפי שכונה */}
-      <div className="mb-6 p-4 rounded-xl border bg-base-100">
-        <div className="font-semibold mb-2">שיבוץ לפי שכונה</div>
-        <div className="flex flex-wrap gap-3 items-end">
-          <div>
-            <label className="label"><span className="label-text">שכונה</span></label>
-            <select className="select select-bordered" value={selectedNeighborhood} onChange={e=>setSelectedNeighborhood(e.target.value)}>
-              <option value="">בחר…</option>
-              {neighborhoods.map(n=>{
-                const c = pendingCounts[n.name] || 0
-                return <option key={n.id} value={n.name}>{n.name} — {c} ממתינים</option>
-              })}
-            </select>
-          </div>
-          <div>
-            <label className="label"><span className="label-text">כמות משלוחים</span></label>
-            <input type="number" min="1" className="input input-bordered w-36"
-                   value={wantedCount} onChange={e=>setWantedCount(e.target.value)} />
-          </div>
-          <button className="btn btn-primary" onClick={claimAssignments} disabled={!selectedNeighborhood}>📦 קבל שיבוץ</button>
-        </div>
-        {msg && <div className="alert mt-3"><span>{msg}</span></div>}
-      </div>
+		<div className="
+		  mb-6 p-5 rounded-2xl border
+		  bg-white/10 dark:bg-white/10
+		  backdrop-blur-md
+		  border-white/20 shadow-xl
+		">
+		  <div className="font-semibold mb-3">שיבוץ לפי שכונה</div>
+
+		  <div className="flex flex-wrap gap-3 items-center">
+			{/* שכונה — בלי label מעל, בשורה אחת עם כולם */}
+			<div className="flex items-center gap-2">
+			  <span className="text-sm opacity-80">שכונה</span>
+			  <select
+				className="select select-bordered min-w-[180px]"
+				value={selectedNeighborhood}
+				onChange={e=>setSelectedNeighborhood(e.target.value)}
+			  >
+				<option value="">בחר…</option>
+				{neighborhoods.map(n=>{
+				  const c = pendingCounts[n.name] || 0
+				  return <option key={n.id} value={n.name}>{n.name} — {c} ממתינים</option>
+				})}
+			  </select>
+			</div>
+
+			{/* כמות */}
+			<div className="flex items-center gap-2">
+			  <span className="text-sm opacity-80">כמות משלוחים</span>
+			  <input
+				type="number" min="1"
+				className="input input-bordered w-24 text-center"
+				value={wantedCount}
+				onChange={e=>setWantedCount(e.target.value)}
+			  />
+			</div>
+
+			{/* כפתור פעולה */}
+			<button
+			  className="btn btn-primary"
+			  onClick={claimAssignments}
+			  disabled={!selectedNeighborhood}
+			  title="קבל שיבוץ"
+			>
+			  📦 קבל שיבוץ
+			</button>
+		  </div>
+
+		  {msg && <div className="alert mt-3"><span>{msg}</span></div>}
+		</div>
+
 
       {/* הטבלה שלי */}
-      <div className="p-4 rounded-xl border bg-base-100">
+      <div className="
+		  p-5 rounded-2xl border
+		  bg-white/10 dark:bg-white/10
+		  backdrop-blur-md
+		  border-white/20 shadow-xl">
         <div className="font-semibold mb-2">המשלוחים ששובצו לך</div>
         {myErr && <div className="alert alert-error mb-3"><span>{myErr}</span></div>}
         {my.length===0 ? (
