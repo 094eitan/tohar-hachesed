@@ -9,41 +9,37 @@ import Volunteer from "./pages/Volunteer";
 import VolunteerStats from "./pages/VolunteerStats";
 import AdminEditRequests from "./pages/AdminEditRequests.jsx";
 
-import ThemeToggle from "./components/ThemeToggle";   // ✅ נתיב נכון
-import GradientWaves from "./components/GradientWaves"; // 👈 הרקע הקבוע לכל האפליקציה
+import { auth } from "./lib/firebase";             // ✅ ייבוא סטטי (אין await)
+import ThemeToggle from "./components/ThemeToggle";
+import GradientWaves from "./components/GradientWaves"; // 👈 רקע קבוע למסך
 
 function NavBar() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(auth.currentUser);
   const nav = useNavigate();
 
   useEffect(() => {
-    const un = (await import("./lib/firebase")).auth.onAuthStateChanged(setUser);
+    const un = auth.onAuthStateChanged(setUser);   // ✅ בלי await
     return () => un();
   }, []);
 
   async function doLogout() {
-    const { auth } = await import("./lib/firebase");
-    const { signOut } = await import("firebase/auth");
+    const { signOut } = await import("firebase/auth"); // זה בתוך async, מותר
     await signOut(auth);
-    nav("/"); // חזרה לדף הכניסה
+    nav("/");
   }
 
   return (
-    // שקיפות קלה + blur כדי לראות את הרקע זז מתחת
     <nav className="navbar bg-base-100/60 backdrop-blur border-b sticky top-0 z-20">
       <div className="flex-1">
         <Link className="btn btn-ghost text-xl" to="/">טוהר החסד</Link>
       </div>
-
       <div className="flex gap-2 items-center">
         <ThemeToggle />
         <Link className="btn btn-ghost" to="/">כניסה</Link>
         <Link className="btn btn-ghost" to="/volunteer">מתנדב</Link>
         <Link className="btn btn-ghost" to="/admin">אדמין</Link>
         {user && (
-          <button className="btn btn-outline" onClick={doLogout}>
-            התנתק
-          </button>
+          <button className="btn btn-outline" onClick={doLogout}>התנתק</button>
         )}
       </div>
     </nav>
@@ -53,7 +49,7 @@ function NavBar() {
 export default function App() {
   return (
     <BrowserRouter>
-      {/* 🔵 רקע הגלים – קבוע לכל המסך, לא זז בגלילה */}
+      {/* 🔵 רקע הגלים — קבוע, מכסה תמיד 100vh/100vw, ולא זז בגלילה */}
       <GradientWaves
         className="fixed inset-0 w-screen h-screen -z-10"
         lines={20}
@@ -71,21 +67,17 @@ export default function App() {
         crazyness={false}
       />
 
-      {/* כל האפליקציה מעל הרקע */}
+      {/* התוכן מעל הרקע */}
       <div className="relative z-10 min-h-screen">
         <NavBar />
-
         <main className="max-w-6xl mx-auto p-6">
           <Routes>
-            {/* דף הבית = כניסה */}
             <Route path="/" element={<Login />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/volunteers" element={<AdminVolunteers />} />
             <Route path="/admin/edits" element={<AdminEditRequests />} />
             <Route path="/volunteer" element={<Volunteer />} />
             <Route path="/volunteer/stats" element={<VolunteerStats />} />
-
-            {/* 404 */}
             <Route
               path="*"
               element={

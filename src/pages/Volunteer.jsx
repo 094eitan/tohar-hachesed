@@ -1,14 +1,14 @@
 // src/Volunteer.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { auth, db, serverTimestamp } from "./lib/firebase";
+import { auth, db, serverTimestamp } from "../lib/firebase";
 import {
   collection, doc, getDocs, onSnapshot, query,
   updateDoc, where, deleteDoc, limit, setDoc
 } from "firebase/firestore";
 
-import WazeLink from "./WazeLink";
-import RequestEditModal from "./RequestEditModal";
+import WazeLink from "../components/WazeLink";;
+import RequestEditModal from "../components/RequestEditModal";;
 
 /* מחרוזת כתובת fallback ל־Waze (כשאין lat/lng) */
 function addrString(a) {
