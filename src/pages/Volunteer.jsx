@@ -243,27 +243,31 @@ export default function Volunteer()
 
   if (!user || user.isAnonymous) return null;
 
-  return (
-    <div
-      dir="rtl"
-      className="relative max-w-6xl mx-auto p-6 min-h-[85vh]"
-    >
-      {/* רקע הגלים החדש (ממש כמו בקודפן) */}
-	 <GradientWaves
-	  amplitudeX={100}
-	  amplitudeY={20}
-	  lines={20}
-	  hueStart={53}
-	  satStart={74}
-	  lightStart={67}
-	  hueEnd={216}
-	  satEnd={100}
-	  lightEnd={7}
-	  smoothness={3}
-	  offsetX={10}
-	  fill={true}        // אם תרצה רק קווי מתאר: false
-	  crazyness={false}  // אם תרצה “משוגע”: true
-	/>
+	return (
+	  <>
+		{/* רקע קבוע שמכסה את כל המסך, לא זז בגלילה */}
+		<GradientWaves
+		  className="fixed inset-0"   // 👈 חשוב: fixed + inset-0
+		  lines={20}
+		  amplitudeX={100}
+		  amplitudeY={20}
+		  hueStart={53}
+		  satStart={74}
+		  lightStart={67}
+		  hueEnd={216}
+		  satEnd={100}
+		  lightEnd={7}
+		  smoothness={3}
+		  offsetX={10}
+		  fill={true}
+		  crazyness={false}
+		/>
+
+		{/* כל התוכן מעל הרקע הקבוע */}
+		<div
+		  dir="rtl"
+		  className="relative z-10 max-w-6xl mx-auto p-6 min-h-screen"
+		>
 
 
       {/* Header קטן */}
@@ -407,7 +411,8 @@ export default function Volunteer()
         deliveryId={editDeliveryId}
         currentUserUid={user?.uid}
       />
-    </div>
+     </div>
+   </>
   );
 }
 
