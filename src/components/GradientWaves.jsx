@@ -2,22 +2,22 @@ import React, { useEffect, useRef } from "react";
 import chroma from "chroma-js";
 
 /**
- * רקע גלים מונפש בסגנון CodePen (supah/gradient waves),
- * ארוז כקומפוננטה ל-React.
- *
- * Props אופציונליים לשינוי העיצוב:
- * - lines=20
- * - amplitudeX=100, amplitudeY=20
- * - hueStart=53, satStart=74, lightStart=67
- * - hueEnd=216, satEnd=100, lightEnd=7
- * - smoothness=3, offsetX=10
- * - fill=true  (אם false תקבל קווי מתאר בלבד)
- * - bgImageUrl (תמונת רקע עדינה מאחורי הגלים)
+ * GradientWaves — גרסת "supah" עם settings מלאים:
+ * props:
+ *  - amplitudeX=100, amplitudeY=20
+ *  - lines=20
+ *  - hueStart=53,  satStart=74,  lightStart=67
+ *  - hueEnd=216,   satEnd=100,   lightEnd=7
+ *  - smoothness=3
+ *  - offsetX=10
+ *  - fill=true      (אם false — קווי מתאר)
+ *  - crazyness=false (גלים "פרועים" אקראיים)
+ *  - className (אופציונלי, לעיצוב העוטף)
  */
 export default function GradientWaves({
-  lines = 20,
   amplitudeX = 100,
   amplitudeY = 20,
+  lines = 20,
   hueStart = 53,
   satStart = 74,
   lightStart = 67,
@@ -27,7 +27,8 @@ export default function GradientWaves({
   smoothness = 3,
   offsetX = 10,
   fill = true,
-  bgImageUrl = "https://raw.githubusercontent.com/supahfunk/gradientwaves-svg/master/dist/img/bg-gradient-wave.png",
+  crazyness = false,
+  className = "",
 }) {
   const hostRef = useRef(null);
 
@@ -35,62 +36,60 @@ export default function GradientWaves({
     const host = hostRef.current;
     if (!host) return;
 
-    // מידות
     let winW = host.clientWidth || window.innerWidth;
     let winH = host.clientHeight || window.innerHeight;
-
-    // Overflow כדי לסגור יפה את הצורה בצדי המסך
     let overflow = Math.abs(lines * offsetX);
 
-    // צבעי התחלה/סיום
+    // צבעים כמו בקוד המקור
     const startColor = `hsl(${hueStart}, ${satStart}%, ${lightStart}%)`;
     const endColor   = `hsl(${hueEnd}, ${satEnd}%, ${lightEnd}%)`;
     const Colors     = chroma.scale([startColor, endColor]).mode("lch").colors(lines + 2);
 
-    // נקים SVG חדש בתוך ה־host (לא על body)
+    // בונים SVG בתוך ה־host (לא על body)
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("width", "100%");
     svg.setAttribute("height", "100%");
     svg.style.display = "block";
-    svg.setAttribute("id", "volunteer-waves");
-    svg.setAttribute("class", fill ? "gw-path" : "gw-stroke");
-    host.innerHTML = ""; // ניקוי אם היה קודם
+    svg.setAttribute("id", "svg");
+    svg.setAttribute("class", fill ? "path" : "stroke");
+    // רקע לפי Colors[0] (כמו בדמו)
+    svg.style.backgroundColor = fill ? Colors[0] : "#000";
+
+    host.innerHTML = "";
     host.appendChild(svg);
 
-    // רקע סטטי (כמו בדמו)
-    if (fill) {
-      svg.style.background = `url(${bgImageUrl}) center / cover no-repeat`;
-    } else {
-      svg.style.background = "#000";
-    }
-
     class Path {
-      constructor(y, fillColor, offX) {
+      constructor(y, color, offX) {
         this.rootY = y;
-        this.fill = fillColor;
+        this.fill = color;
         this.offsetX = offX;
         this.root = [];
       }
 
       createRoot() {
+        const rootY = this.rootY;
         let x = -overflow + this.offsetX;
         let y = 0;
-        let rootY = this.rootY;
         let upSideDown = 0;
 
-        this.root.push({ x, y: rootY });
+        this.root = [{ x, y: rootY }];
 
         while (x < winW) {
-          // גיאומטרי (כמו בדמו; “crazyness” כבוי)
-          upSideDown = !upSideDown;
-          const value = upSideDown ? -1 : 1;
-
-          x += amplitudeX;
-          y = amplitudeY * value + rootY;
-
+          if (crazyness) {
+            // גרסה "משוגעת" — צעדים אקראיים
+            x += parseInt((Math.random() * amplitudeX / 2) + (amplitudeX / 2));
+            const s = parseInt((Math.random() * amplitudeY / 2) + (amplitudeY / 2));
+            const dir = Math.random() > 0.5 ? 1 : -1;
+            y = s * dir + rootY;
+          } else {
+            // גיאומטרי מדויק — הפיכות למעלה/למטה לסירוגין
+            upSideDown = !upSideDown;
+            const dir = upSideDown ? -1 : 1;
+            x += amplitudeX;
+            y = amplitudeY * dir + rootY;
+          }
           this.root.push({ x, y });
         }
-
         this.root.push({ x: winW + overflow, y: rootY });
       }
 
@@ -99,11 +98,11 @@ export default function GradientWaves({
         path.setAttribute("fill", this.fill);
         path.setAttribute("stroke", this.fill);
 
-        // ראשית מסלול
+        // נקודות התחלה
         let d = `M -${overflow} ${winH + overflow}`;
         d += ` L ${this.root[0].x} ${this.root[0].y}`;
 
-        // עיקולים חלקים (smoothness)
+        // עקומות חלקות (smoothness)
         for (let i = 1; i < this.root.length - 1; i++) {
           const prev = this.root[i - 1];
           const curr = this.root[i];
@@ -118,7 +117,8 @@ export default function GradientWaves({
         // לפני אחרון
         const reverse = [...this.root].reverse();
         d += ` L ${reverse[0].x} ${reverse[0].y}`;
-        // נקודה אחרונה וסגירה
+
+        // אחרון + סגירה
         d += ` L ${winW + overflow} ${winH + overflow} Z`;
 
         path.setAttribute("d", d);
@@ -126,35 +126,25 @@ export default function GradientWaves({
       }
     }
 
-    // בניית השכבות
-    const paths = [];
+    // יצירת כל השכבות
     for (let i = 0; i < lines + 1; i++) {
-      const y = parseInt(winH / lines * i);
-      const p = new Path(y, Colors[i + 1], offsetX * i);
+      const rootY = parseInt(winH / lines * i);
+      const p = new Path(rootY, Colors[i + 1], offsetX * i);
       p.createRoot();
       p.createPath();
-      paths.push(p);
     }
 
-    // האזנה לשינויי גודל בתוך הקונטיינר/חלון
     const onResize = () => {
       winW = host.clientWidth || window.innerWidth;
       winH = host.clientHeight || window.innerHeight;
       // רנדר מחדש
       while (svg.firstChild) svg.removeChild(svg.firstChild);
-      // רקע
-      if (fill) {
-        svg.style.background = `url(${bgImageUrl}) center / cover no-repeat`;
-      } else {
-        svg.style.background = "#000";
-      }
-      const newPaths = [];
+      svg.style.backgroundColor = fill ? Colors[0] : "#000";
       for (let i = 0; i < lines + 1; i++) {
-        const y = parseInt(winH / lines * i);
-        const p = new Path(y, Colors[i + 1], offsetX * i);
+        const rootY = parseInt(winH / lines * i);
+        const p = new Path(rootY, Colors[i + 1], offsetX * i);
         p.createRoot();
         p.createPath();
-        newPaths.push(p);
       }
     };
 
@@ -162,24 +152,23 @@ export default function GradientWaves({
     ro.observe(host);
     window.addEventListener("resize", onResize);
 
-    // ניקוי
     return () => {
       window.removeEventListener("resize", onResize);
       ro.disconnect();
       host.innerHTML = "";
     };
   }, [
-    lines, amplitudeX, amplitudeY,
+    amplitudeX, amplitudeY, lines,
     hueStart, satStart, lightStart,
     hueEnd, satEnd, lightEnd,
-    smoothness, offsetX, fill, bgImageUrl
+    smoothness, offsetX, fill, crazyness
   ]);
 
-  // הקונטיינר צריך להיות absolute מאחורי התוכן
+  // מאחורי כל התוכן
   return (
     <div
       ref={hostRef}
-      className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+      className={`pointer-events-none absolute inset-0 -z-10 overflow-hidden ${className}`}
       aria-hidden
     />
   );
