@@ -9,122 +9,9 @@ import {
 
 import WazeLink from "../components/WazeLink";
 import RequestEditModal from "../components/RequestEditModal";
+import GradientWaves from "../components/GradientWaves"; // 👈 הרקע החדש
 
-/** ------------------------------------------------------------------
- *  רקע גלים אנימטיבי (בסגנון loading.io) — חינמי וללא ספריות חיצוניות
- * ------------------------------------------------------------------ */
-function BackgroundWavesInline({
-  height = 360,
-  speed = 16,
-  gradientA = "#ff00ff",
-  gradientB = "#00ffff",
-  opacityTop = 0.25,
-  opacityMid = 0.35,
-  opacityBot = 0.45
-})
-{
-  const W = 2400;
-  const H = 600;
-  const dur1 = speed;
-  const dur2 = speed * 1.3;
-  const dur3 = speed * 1.7;
-
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
-      style={{ height: "100%" }}
-    >
-      <svg
-        width="100%"
-        height="100%"
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="xMidYMid slice"
-        className="block"
-      >
-        <defs>
-          <linearGradient id="bgGrad" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0%" stopColor={gradientA} />
-            <stop offset="100%" stopColor={gradientB} />
-          </linearGradient>
-
-          <clipPath id="clip">
-            <rect x="0" y="0" width={W} height={height} rx="0" />
-          </clipPath>
-
-          <path
-            id="wavePath1"
-            d="
-              M0 300
-              C 200 260, 400 340, 600 300
-              C 800 260, 1000 340, 1200 300
-              C 1400 260, 1600 340, 1800 300
-              C 2000 260, 2200 340, 2400 300
-              V 600 H 0 Z
-            "
-          />
-          <path
-            id="wavePath2"
-            d="
-              M0 320
-              C 200 280, 400 360, 600 320
-              C 800 280, 1000 360, 1200 320
-              C 1400 280, 1600 360, 1800 320
-              C 2000 280, 2200 360, 2400 320
-              V 600 H 0 Z
-            "
-          />
-          <path
-            id="wavePath3"
-            d="
-              M0 340
-              C 200 300, 400 380, 600 340
-              C 800 300, 1000 380, 1200 340
-              C 1400 300, 1600 380, 1800 340
-              C 2000 300, 2200 380, 2400 340
-              V 600 H 0 Z
-            "
-          />
-        </defs>
-
-        {/* שכבת גרדיאנט אחידה מתחת לגלים */}
-        <rect x="0" y="0" width={W} height={height} fill="url(#bgGrad)" clipPath="url(#clip)" />
-
-        {/* שלוש שכבות גלים בלופ חלק */}
-        <g clipPath="url(#clip)">
-          <g opacity={opacityTop}>
-            <use href="#wavePath1" fill="url(#bgGrad)">
-              <animateTransform attributeName="transform" type="translate" from="0 0" to="-1200 0" dur={`${dur1}s`} repeatCount="indefinite" />
-            </use>
-            <use href="#wavePath1" fill="url(#bgGrad)" transform="translate(1200,0)">
-              <animateTransform attributeName="transform" type="translate" from="1200 0" to="0 0" dur={`${dur1}s`} repeatCount="indefinite" />
-            </use>
-          </g>
-
-          <g opacity={opacityMid}>
-            <use href="#wavePath2" fill="url(#bgGrad)">
-              <animateTransform attributeName="transform" type="translate" from="0 0" to="-1200 0" dur={`${dur2}s`} repeatCount="indefinite" />
-            </use>
-            <use href="#wavePath2" fill="url(#bgGrad)" transform="translate(1200,0)">
-              <animateTransform attributeName="transform" type="translate" from="1200 0" to="0 0" dur={`${dur2}s`} repeatCount="indefinite" />
-            </use>
-          </g>
-
-          <g opacity={opacityBot}>
-            <use href="#wavePath3" fill="url(#bgGrad)">
-              <animateTransform attributeName="transform" type="translate" from="0 0" to="-1200 0" dur={`${dur3}s`} repeatCount="indefinite" />
-            </use>
-            <use href="#wavePath3" fill="url(#bgGrad)" transform="translate(1200,0)">
-              <animateTransform attributeName="transform" type="translate" from="1200 0" to="0 0" dur={`${dur3}s`} repeatCount="indefinite" />
-            </use>
-          </g>
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-/* מחרוזת כתובת fallback ל־Waze (כשאין lat/lng) */
+/* פונקציה ליצירת כתובת חופשית ל-Waze אם אין קואורדינטות */
 function addrString(a)
 {
   if (!a) { return ""; }
@@ -139,7 +26,7 @@ export default function Volunteer()
 {
   const nav = useNavigate();
 
-  // משתמש מחובר (לא אנונימי)
+  // משתמש
   const [user, setUser] = useState(auth.currentUser);
   useEffect(() =>
   {
@@ -186,7 +73,7 @@ export default function Volunteer()
     return () => un();
   }, []);
 
-  // ספירת ממתינים מכל שכונה (pending_index)
+  // ממתינים לפי שכונה
   const [pendingCounts, setPendingCounts] = useState({});
   useEffect(() =>
   {
@@ -209,7 +96,7 @@ export default function Volunteer()
   const [wantedCount, setWantedCount] = useState(1);
   const [msg, setMsg] = useState("");
 
-  // המשלוחים שלי (רק לא מושלמים)
+  // המשלוחים שלי (לא מושלמים)
   const [my, setMy] = useState([]);
   const [myErr, setMyErr] = useState("");
 
@@ -276,7 +163,7 @@ export default function Volunteer()
         await deleteDoc(doc(db, "pending_index", id)).catch(() => {});
         ok++;
       }
-      catch(e) { /* נתפס במקביל ע"י אחר */ }
+      catch(e) { /* מישהו אחר תפס במקביל */ }
     }
     setMsg(ok ? `שובצו ${ok} משלוחים` : "לא הצלחתי לשבץ, נסה שוב בעוד רגע");
   }
@@ -359,16 +246,26 @@ export default function Volunteer()
   return (
     <div
       dir="rtl"
-      className="
-        relative max-w-6xl mx-auto p-6
-        min-h-[85vh]
-        bg-gradient-to-b from-slate-900/20 via-slate-900/10 to-slate-900/0
-      "
+      className="relative max-w-6xl mx-auto p-6 min-h-[85vh]"
     >
-      {/* רקע גלים */}
-      <BackgroundWavesInline height={360} speed={16} gradientA="#ff00ff" gradientB="#00ffff" />
+      {/* רקע הגלים החדש (ממש כמו בקודפן) */}
+      <GradientWaves
+        lines={20}
+        amplitudeX={100}
+        amplitudeY={20}
+        hueStart={53}    // זהבי בהיר
+        satStart={74}
+        lightStart={67}
+        hueEnd={216}     // סגול-כחול כהה
+        satEnd={100}
+        lightEnd={7}
+        smoothness={3}
+        offsetX={10}
+        fill={true}
+      />
 
-      <div className="flex items-center justify-between mb-4">
+      {/* Header קטן */}
+      <div className="flex items-center justify-between mb-4 relative z-10">
         <h2 className="text-xl font-semibold">שלום {displayName} 👋</h2>
         <div className="flex gap-2">
           <button className="btn btn-ghost" onClick={() => nav("/volunteer/stats")}>סיכומים ויעדים</button>
@@ -376,17 +273,11 @@ export default function Volunteer()
         </div>
       </div>
 
-      {/* הסבר + פיצ'רים */}
-      <div className="
-        mb-6 p-5 rounded-2xl border
-        bg-white/10 dark:bg-white/10
-        backdrop-blur-md
-        border-white/20 shadow-xl
-      ">
+      {/* מלבן #1 — הסבר + פיצ'רים */}
+      <div className="relative z-10 mb-6 p-5 rounded-2xl border bg-white/10 dark:bg-white/10 backdrop-blur-md border-white/20 shadow-xl">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold">איך זה עובד? ✨</h3>
         </div>
-
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div className="space-y-2 text-sm leading-6">
             <div className="font-semibold opacity-90">זרימת שיבוץ ומשלוח</div>
@@ -394,31 +285,24 @@ export default function Volunteer()
               <li>בחר/י שכונה וכמות, ואז <b>📦 קבל שיבוץ</b>.</li>
               <li>בכל שורה ניתן לעדכן סטטוס: <em>בדרך</em> / <em>נמסרה</em> / <em>חזרה</em>, או <b>שחרר</b>.</li>
               <li>אחרי <b>נמסרה</b> יופיע <b>סיים משימה</b> — זה מסתיר אותה מהרשימה שלך.</li>
-              <li>ניווט? לחצו <b>״ניווט עם וויז״</b> — עדיפות ל־<code>lat/lng</code>, אם אין אז כתובת.</li>
+              <li>ניווט? <b>וויז</b> עם עדיפות ל-<code>lat/lng</code>, ואם אין – לפי כתובת.</li>
             </ol>
           </div>
-
           <div className="space-y-2 text-sm leading-6">
             <div className="font-semibold opacity-90">מה חדש בדף?</div>
             <ul className="space-y-2">
-              <li>✅ <b>כפתור Waze כחול</b> (lat/lng → כתובת כ־fallback).</li>
-              <li>✅ <b>סיים משימה</b> שמעלים משימות שסומנו נמסרה.</li>
-              <li>✅ <b>הצע תיקון</b> — מודאל שמייצר בקשה לאדמין והשוואה לפני/אחרי.</li>
-              <li>✅ <b>סטטיסטיקות ויעדים</b> בדף נפרד.</li>
+              <li>✅ כפתור Waze כחול (lat/lng → כתובת).</li>
+              <li>✅ סיים משימה מסתיר משלוחים שסומנו נמסרה.</li>
+              <li>✅ הצע תיקון — מודאל שמייצר בקשה לאדמין.</li>
+              <li>✅ סטטיסטיקות ויעדים בעמוד נפרד.</li>
             </ul>
           </div>
         </div>
       </div>
 
-      {/* שיבוץ לפי שכונה */}
-      <div className="
-        mb-6 p-5 rounded-2xl border
-        bg-white/10 dark:bg-white/10
-        backdrop-blur-md
-        border-white/20 shadow-xl
-      ">
+      {/* מלבן #2 — שיבוץ לפי שכונה */}
+      <div className="relative z-10 mb-6 p-5 rounded-2xl border bg-white/10 dark:bg-white/10 backdrop-blur-md border-white/20 shadow-xl">
         <div className="font-semibold mb-3">שיבוץ לפי שכונה</div>
-
         <div className="flex flex-wrap gap-3 items-center">
           <div className="flex items-center gap-2">
             <span className="text-sm opacity-80">שכונה</span>
@@ -459,13 +343,8 @@ export default function Volunteer()
         {msg && <div className="alert mt-3"><span>{msg}</span></div>}
       </div>
 
-      {/* הטבלה שלי */}
-      <div className="
-        p-5 rounded-2xl border
-        bg-white/10 dark:bg-white/10
-        backdrop-blur-md
-        border-white/20 shadow-xl
-      ">
+      {/* מלבן #3 — המשלוחים שלי */}
+      <div className="relative z-10 p-5 rounded-2xl border bg-white/10 dark:bg-white/10 backdrop-blur-md border-white/20 shadow-xl">
         <div className="font-semibold mb-2">המשלוחים ששובצו לך</div>
         {myErr && <div className="alert alert-error mb-3"><span>{myErr}</span></div>}
 
